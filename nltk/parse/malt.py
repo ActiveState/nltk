@@ -31,34 +31,34 @@ def malt_regex_tagger():
 
     _tagger = RegexpTagger(
         [
-            (r'\.$', '.'),
-            (r'\,$', ','),
-            (r'\?$', '?'),  # fullstop, comma, Qmark
-            (r'\($', '('),
-            (r'\)$', ')'),  # round brackets
-            (r'\[$', '['),
-            (r'\]$', ']'),  # square brackets
-            (r'^-?[0-9]+(.[0-9]+)?$', 'CD'),  # cardinal numbers
-            (r'(The|the|A|a|An|an)$', 'DT'),  # articles
-            (r'(He|he|She|she|It|it|I|me|Me|You|you)$', 'PRP'),  # pronouns
-            (r'(His|his|Her|her|Its|its)$', 'PRP$'),  # possesive
-            (r'(my|Your|your|Yours|yours)$', 'PRP$'),  # possesive
-            (r'(on|On|in|In|at|At|since|Since)$', 'IN'),  # time prepopsitions
-            (r'(for|For|ago|Ago|before|Before)$', 'IN'),  # time prepopsitions
-            (r'(till|Till|until|Until)$', 'IN'),  # time prepopsitions
-            (r'(by|By|beside|Beside)$', 'IN'),  # space prepopsitions
-            (r'(under|Under|below|Below)$', 'IN'),  # space prepopsitions
-            (r'(over|Over|above|Above)$', 'IN'),  # space prepopsitions
-            (r'(across|Across|through|Through)$', 'IN'),  # space prepopsitions
-            (r'(into|Into|towards|Towards)$', 'IN'),  # space prepopsitions
-            (r'(onto|Onto|from|From)$', 'IN'),  # space prepopsitions
-            (r'.*able$', 'JJ'),  # adjectives
-            (r'.*ness$', 'NN'),  # nouns formed from adjectives
-            (r'.*ly$', 'RB'),  # adverbs
-            (r'.*s$', 'NNS'),  # plural nouns
-            (r'.*ing$', 'VBG'),  # gerunds
-            (r'.*ed$', 'VBD'),  # past tense verbs
-            (r'.*', 'NN'),  # nouns (default)
+            (r"\.$", "."),
+            (r"\,$", ","),
+            (r"\?$", "?"),  # fullstop, comma, Qmark
+            (r"\($", "("),
+            (r"\)$", ")"),  # round brackets
+            (r"\[$", "["),
+            (r"\]$", "]"),  # square brackets
+            (r"^-?[0-9]+(\.[0-9]+)?$", "CD"),  # cardinal numbers
+            (r"(The|the|A|a|An|an)$", "DT"),  # articles
+            (r"(He|he|She|she|It|it|I|me|Me|You|you)$", "PRP"),  # pronouns
+            (r"(His|his|Her|her|Its|its)$", "PRP$"),  # possessive
+            (r"(my|Your|your|Yours|yours)$", "PRP$"),  # possessive
+            (r"(on|On|in|In|at|At|since|Since)$", "IN"),  # time prepopsitions
+            (r"(for|For|ago|Ago|before|Before)$", "IN"),  # time prepopsitions
+            (r"(till|Till|until|Until)$", "IN"),  # time prepopsitions
+            (r"(by|By|beside|Beside)$", "IN"),  # space prepopsitions
+            (r"(under|Under|below|Below)$", "IN"),  # space prepopsitions
+            (r"(over|Over|above|Above)$", "IN"),  # space prepopsitions
+            (r"(across|Across|through|Through)$", "IN"),  # space prepopsitions
+            (r"(into|Into|towards|Towards)$", "IN"),  # space prepopsitions
+            (r"(onto|Onto|from|From)$", "IN"),  # space prepopsitions
+            (r".*able$", "JJ"),  # adjectives
+            (r".*ness$", "NN"),  # nouns formed from adjectives
+            (r".*ly$", "RB"),  # adverbs
+            (r".*s$", "NNS"),  # plural nouns
+            (r".*ing$", "VBG"),  # gerunds
+            (r".*ed$", "VBD"),  # past tense verbs
+            (r".*", "NN"),  # nouns (default)
         ]
     )
     return _tagger.tag
