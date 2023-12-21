@@ -1,3 +1,12 @@
+Version 3.4.5.1 2023-12-21
+
+* Resolve serious ReDoS in PunktSentenceTokenizer (#2869) - CVE-2021-43854
+* Resolve ReDoS opportunity by fixing incorrectly specified regex (#2906) - CVE-2021-3842
+* Resolved ReDoS vulnerability in Corpus Reader (#2816) - CVE-2021-3828
+
+Thanks to the following contributors to 3.4.5.1:
+Steven Bird, Tom Aarsen, purificant
+
 Version 3.4.5 2019-08-20
 * Fixed security bug in downloader: Zip slip vulnerability - for the unlikely
   situation where a user configures their downloader to use a compromised server
