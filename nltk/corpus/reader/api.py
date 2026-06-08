@@ -209,6 +209,13 @@ class CorpusReader(object):
 
         :param file: The file identifier of the file to read.
         """
+        # CVE-2026-0847: reject absolute paths and ".." traversal so a caller
+        # cannot read files outside the corpus root.
+        fileid = file if isinstance(file, string_types) else str(file)
+        if os.path.isabs(fileid):
+            raise ValueError("Absolute paths are not allowed: %r" % (fileid,))
+        if '..' in fileid.replace('\\', '/').split('/'):
+            raise ValueError("Path traversal is not allowed: %r" % (fileid,))
         encoding = self.encoding(file)
         stream = self._root.join(file).open(encoding)
         return stream
