@@ -2260,6 +2260,32 @@ def _unzip_iter(filename, root, verbose=True):
         yield ErrorMessage(filename, e)
         return
 
+    # CVE-2025-14009: validate every member before extracting so a malicious
+    # zip cannot escape ``root`` via absolute paths, drive letters, ``..``
+    # traversal or symlink entries (zip slip -> RCE on next import).
+    root_real = os.path.realpath(root)
+    for member in zf.infolist():
+        name = member.filename.replace('\\', '/')
+        if name.startswith('/') or (':' in name.split('/')[0]):
+            yield ErrorMessage(
+                filename, 'Unsafe zip entry (absolute path): %r' % name)
+            return
+        parts = [p for p in name.split('/') if p and p != '.']
+        if '..' in parts:
+            yield ErrorMessage(
+                filename, 'Unsafe zip entry (path traversal): %r' % name)
+            return
+        # reject unix symlink entries (mode S_IFLNK == 0o120000)
+        if (((member.external_attr >> 16) & 0o170000) == 0o120000):
+            yield ErrorMessage(
+                filename, 'Unsafe zip entry (symlink): %r' % name)
+            return
+        target = os.path.realpath(os.path.join(root, *parts)) if parts else root_real
+        if target != root_real and not target.startswith(root_real + os.sep):
+            yield ErrorMessage(
+                filename, 'Unsafe zip entry (escapes target dir): %r' % name)
+            return
+
     zf.extractall(root)
 
     if verbose:
