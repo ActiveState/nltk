@@ -49,6 +49,7 @@ from __future__ import print_function
 # Allow this program to run inside the NLTK source tree.
 from sys import path
 
+import cgi
 import os
 import sys
 from sys import argv
@@ -804,7 +805,10 @@ def page_from_reference(href):
                 except KeyError:
                     pass
     if not body:
-        body = "The word or words '%s' where not found in the dictonary." % word
+        # CVE-2026-33230: escape the attacker-controlled word reflected into
+        # the HTML error page (reflected XSS).
+        body = "The word or words '%s' where not found in the dictonary." % \
+            cgi.escape(word, quote=True)
     return body, word
 
 
