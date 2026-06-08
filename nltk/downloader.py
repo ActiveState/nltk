@@ -227,6 +227,18 @@ class Package(object):
         unzip=True,
         **kw
     ):
+        # CVE-2026-33236: ``id`` and ``subdir`` come from a remote XML index;
+        # reject path separators / traversal so a malicious index cannot make
+        # the downloader write outside the download directory.
+        if os.sep in id or '/' in id or '\\' in id or '..' in id:
+            raise ValueError(
+                'Invalid package id %r: must not contain path separators '
+                'or parent references' % (id,))
+        if os.path.isabs(subdir) or '..' in subdir.replace('\\', '/').split('/'):
+            raise ValueError(
+                'Invalid package subdir %r: must be a relative path without '
+                'parent directory references' % (subdir,))
+
         self.id = id
         """A unique identifier for this package."""
 
@@ -698,6 +710,16 @@ class Downloader(object):
 
         # Check for (and remove) any old/stale version.
         filepath = os.path.join(download_dir, info.filename)
+        # CVE-2026-33236 (defense in depth): make sure the computed path stays
+        # within download_dir even if Package validation were bypassed.
+        real_download = os.path.realpath(os.path.abspath(download_dir))
+        real_filepath = os.path.realpath(os.path.abspath(filepath))
+        if real_filepath != real_download and \
+           not real_filepath.startswith(real_download + os.sep):
+            yield ErrorMessage(
+                info, 'Path traversal blocked: package %r would be written '
+                'outside the download directory' % (info.id,))
+            return
         if os.path.exists(filepath):
             if status == self.STALE:
                 yield StaleMessage(info)
