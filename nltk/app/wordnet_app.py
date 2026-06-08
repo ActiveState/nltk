@@ -244,7 +244,10 @@ def wnb(port=8000, runBrowser=True, logfilename=None):
         browser_thread = startBrowser(url, server_ready)
 
     # Start the server.
-    server = HTTPServer(('', port), MyServerHandler)
+    # CVE-2026-33231: bind to localhost only. Binding to '' exposes the
+    # browser (and its unauthenticated "SHUTDOWN THE SERVER" GET) to every
+    # host on the network.
+    server = HTTPServer(('127.0.0.1', port), MyServerHandler)
     if logfile:
         logfile.write('NLTK Wordnet browser server running serving: %s\n' % url)
     if runBrowser:
