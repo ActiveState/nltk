@@ -45,12 +45,19 @@ class JSONTaggedDecoder(json.JSONDecoder):
         return self.decode_obj(super(JSONTaggedDecoder, self).decode(s))
 
     @classmethod
-    def decode_obj(cls, obj):
+    def decode_obj(cls, obj, _depth=0, _max_depth=100):
+        # GHSA-rf74-v2fm-23pw: cap recursion depth so deeply-nested JSON cannot
+        # exhaust the stack (uncontrolled recursion / DoS). The depth args are
+        # keyword/defaulted, so the public decode()/decode_obj() API is
+        # unchanged.
+        if _depth > _max_depth:
+            raise ValueError('JSONTaggedDecoder: maximum nesting depth exceeded')
         # Decode nested objects first.
         if isinstance(obj, dict):
-            obj = dict((key, cls.decode_obj(val)) for (key, val) in obj.items())
+            obj = dict((key, cls.decode_obj(val, _depth + 1, _max_depth))
+                       for (key, val) in obj.items())
         elif isinstance(obj, list):
-            obj = list(cls.decode_obj(val) for val in obj)
+            obj = list(cls.decode_obj(val, _depth + 1, _max_depth) for val in obj)
         # Check if we have a tagged object.
         if not isinstance(obj, dict) or len(obj) != 1:
             return obj
