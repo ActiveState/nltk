@@ -1,3 +1,26 @@
+Version 3.4.5+security.2 2026-06-08
+
+* Validate zip members before extraction in the downloader to prevent zip-slip
+  RCE (#3468) - CVE-2025-14009
+* Reject path traversal in downloader package id/subdir from the remote index
+  (#89fe2ec) - CVE-2026-33236
+* Block path traversal / absolute paths in CorpusReader file access (#3479,
+  #3480) - CVE-2026-0847
+* Add optional allowed_dir sandbox to util.filestring() (#3485) - CVE-2026-0846
+* Bind the WordNet browser server to localhost only (#bbaae83) - CVE-2026-33231
+* Escape the reflected word in the WordNet browser "not found" page to prevent
+  XSS (#1c3f799) - CVE-2026-33230
+* Cap recursion depth in JSONTaggedDecoder.decode_obj to prevent stack
+  exhaustion - GHSA-rf74-v2fm-23pw
+* CVE-2024-39705 (pickle deserialization in data/model loading) was assessed
+  and is not remediable in place on the 3.4.5 data baseline: upstream resolved
+  it by abandoning the pickled data-package format in 3.9 (new *_tab packages),
+  which is not available for the 3.4.5 download index. Documented; no code
+  change.
+
+Thanks to the following contributors to 3.4.5+security.2:
+ActiveState
+
 Version 3.4.5.1 2023-12-21
 
 * Resolve serious ReDoS in PunktSentenceTokenizer (#2869) - CVE-2021-43854
