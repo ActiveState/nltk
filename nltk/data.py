@@ -351,7 +351,14 @@ class FileSystemPathPointer(PathPointer, text_type):
         return os.stat(self._path).st_size
 
     def join(self, fileid):
-        _path = os.path.join(self._path, fileid)
+        # CVE-2026-0847 (defense in depth): keep joined paths within the root;
+        # reject ".." traversal and absolute fileids that would escape it.
+        if '..' in fileid.replace('\\', '/').split('/'):
+            raise ValueError('Path traversal is not allowed: %r' % (fileid,))
+        _path = os.path.normpath(os.path.join(self._path, fileid))
+        _root = os.path.normpath(self._path)
+        if _path != _root and not _path.startswith(_root + os.sep):
+            raise ValueError('Path escapes the root directory: %r' % (fileid,))
         return FileSystemPathPointer(_path)
 
     def __repr__(self):

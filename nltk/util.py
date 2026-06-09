@@ -201,10 +201,19 @@ def re_show(regexp, string, left="{", right="}"):
 ##########################################################################
 
 # recipe from David Mertz
-def filestring(f):
+def filestring(f, allowed_dir=None):
     if hasattr(f, 'read'):
         return f.read()
     elif isinstance(f, string_types):
+        # CVE-2026-0846: optionally confine reads to allowed_dir so an
+        # absolute path or ".." cannot escape it and read arbitrary files.
+        # allowed_dir=None keeps the legacy behaviour (API-compatible).
+        if allowed_dir is not None:
+            base = os.path.realpath(os.path.abspath(allowed_dir))
+            full = os.path.realpath(os.path.abspath(f))
+            if full != base and not full.startswith(base + os.sep):
+                raise OSError(
+                    "Access outside allowed directory is blocked: %s" % full)
         with open(f, 'r') as infile:
             return infile.read()
     else:
