@@ -77,3 +77,29 @@ class TestPorterYRun(unittest.TestCase):  # GHSA-ww6m-cw3f-q94g
         from nltk.stem.porter import PorterStemmer
         # unpatched: RuntimeError (recursion) at ~1000 'y'; quadratic below
         self.assertLess(_elapsed(lambda: PorterStemmer().stem('y' * 40000 + 'ness')), 2.0)
+
+
+class TestXMLFragment(unittest.TestCase):  # GHSA-vp2x-qp44-57v7
+    def test_benign(self):
+        from nltk.corpus.reader.xmldocs import XMLCorpusView
+        v = XMLCorpusView.__new__(XMLCorpusView)
+        self.assertEqual(v._read_xml_fragment(io.StringIO('<a><b>x</b></a>z')),
+                         '<a><b>x</b></a>z')
+
+    def test_giant_tag(self):
+        from nltk.corpus.reader.xmldocs import XMLCorpusView
+        v = XMLCorpusView.__new__(XMLCorpusView)
+        s = io.StringIO('<a ' + 'x' * 2000000 + '>')
+        self.assertLess(_elapsed(lambda: v._read_xml_fragment(s)), 3.0)  # unpatched ~8s+
+
+
+class TestSexprBlockGrowth(unittest.TestCase):  # same upstream change (7808692d)
+    def test_oversized_sexpr_is_linear(self):
+        from nltk.corpus.reader.util import read_sexpr_block
+
+        text = '(' + 'a ' * 800000 + ')'  # unpatched: ~8s
+        stream = io.StringIO(text)
+        t = time.time()
+        tokens = read_sexpr_block(stream, block_size=1024)
+        self.assertLess(time.time() - t, 1.0)
+        self.assertEqual(tokens, [text])

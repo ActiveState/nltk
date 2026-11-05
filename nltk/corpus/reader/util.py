@@ -706,6 +706,12 @@ def read_sexpr_block(stream, block_size=16384, comment_char=None):
 
     if comment_char:
         COMMENT = re.compile('(?m)^%s.*$' % re.escape(comment_char))
+    # One s-expression spanning many blocks used to re-parse the whole
+    # growing buffer after every fixed-size read: O(n^2) (CWE-407, same
+    # upstream change as CVE-2026-81723).  Doubling the read size makes the
+    # number of re-parses O(log n); the stream is seeked back to the parsed
+    # offset, so the result is unchanged.
+    read_size = block_size
     while True:
         try:
             # If we're stripping comments, then make sure our block ends
@@ -730,7 +736,8 @@ def read_sexpr_block(stream, block_size=16384, comment_char=None):
             return tokens
         except ValueError as e:
             if e.args[0] == 'Block too small':
-                next_block = stream.read(block_size)
+                read_size *= 2
+                next_block = stream.read(read_size)
                 if next_block:
                     block += next_block
                     continue
