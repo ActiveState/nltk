@@ -161,7 +161,7 @@ default: unzip or not?
 """
 import time, os, zipfile, sys, textwrap, threading, itertools, shutil, functools
 import subprocess
-from hashlib import md5
+from hashlib import md5, sha256
 from xml.etree import ElementTree
 
 try:
@@ -757,6 +757,21 @@ class Downloader(object):
         yield FinishDownloadMessage(info)
         yield ProgressMessage(80)
 
+        # CVE-2026-12259 / CVE-2026-63310: verify size and checksum of the
+        # downloaded file against the index *before* it is extracted, so a
+        # tampered or truncated archive never becomes live.  Prefer the
+        # index's sha256_checksum when present; fall back to the md5
+        # checksum carried by older indexes.
+        failure = self._integrity_error(info, filepath)
+        if failure is not None:
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
+            yield ErrorMessage(
+                info, 'Integrity check failed for %r: %s' % (info.id, failure))
+            return
+
         # If it's a zipfile, uncompress it.
         if info.filename.endswith('.zip'):
             zipdir = os.path.join(download_dir, info.subdir)
@@ -920,6 +935,22 @@ class Downloader(object):
                     self._status_cache[info.id] = self._pkg_status(info, filepath)
                 return self._status_cache[info.id]
 
+    @staticmethod
+    def _integrity_error(info, filepath):
+        """Return a reason string if ``filepath`` does not match the size
+        and checksum recorded for ``info`` in the index, else None."""
+        size = os.path.getsize(filepath)
+        if info.size is not None and size != int(info.size):
+            return 'size mismatch (got %d, expected %d)' % (size, int(info.size))
+        sha256_checksum = getattr(info, 'sha256_checksum', None)
+        if sha256_checksum:
+            if sha256_hexdigest(filepath) != sha256_checksum:
+                return 'sha256 mismatch'
+        elif info.checksum:
+            if md5_hexdigest(filepath) != info.checksum:
+                return 'md5 mismatch'
+        return None
+
     def _pkg_status(self, info, filepath):
         if not os.path.exists(filepath):
             return self.NOT_INSTALLED
@@ -932,8 +963,13 @@ class Downloader(object):
         if filestat.st_size != int(info.size):
             return self.STALE
 
-        # Check if the file's checksum matches
-        if md5_hexdigest(filepath) != info.checksum:
+        # Check if the file's checksum matches (sha256 when the index
+        # provides it -- CVE-2026-12259 / CVE-2026-63310 -- else md5).
+        sha256_checksum = getattr(info, 'sha256_checksum', None)
+        if sha256_checksum:
+            if sha256_hexdigest(filepath) != sha256_checksum:
+                return self.STALE
+        elif md5_hexdigest(filepath) != info.checksum:
             return self.STALE
 
         # If it's a zipfile, and it's been at least partially
@@ -2258,6 +2294,27 @@ def _md5_hexdigest(fp):
             break
         md5_digest.update(block)
     return md5_digest.hexdigest()
+
+
+def sha256_hexdigest(file):
+    """
+    Calculate and return the SHA-256 checksum for a given file.
+    ``file`` may either be a filename or an open stream.
+    """
+    if isinstance(file, string_types):
+        with open(file, 'rb') as infile:
+            return _sha256_hexdigest(infile)
+    return _sha256_hexdigest(file)
+
+
+def _sha256_hexdigest(fp):
+    sha256_digest = sha256()
+    while True:
+        block = fp.read(1024 * 16)  # 16k blocks
+        if not block:
+            break
+        sha256_digest.update(block)
+    return sha256_digest.hexdigest()
 
 
 # change this to periodically yield progress messages?

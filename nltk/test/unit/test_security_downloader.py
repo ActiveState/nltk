@@ -92,3 +92,45 @@ class CrossPackageOwnershipTest(_DownloaderTestBase):
         self.assertEqual(self._errors(self._install(pkg)), [])
         self.assertTrue(
             os.path.isfile(os.path.join(self.dl, 'taggers', 'good', 'model.json')))
+
+
+class IntegrityBeforeExtractTest(_DownloaderTestBase):
+    """CVE-2026-12259 / CVE-2026-63310 / GHSA-5wp5-5229-5g6q"""
+
+    def _assert_rejected(self, pkg):
+        errors = self._errors(self._install(pkg))
+        self.assertTrue(errors)
+        self.assertIn('Integrity check failed', errors[0].message)
+        self.assertFalse(
+            os.path.exists(os.path.join(self.dl, 'taggers', 'pkg')))
+        self.assertFalse(
+            os.path.exists(os.path.join(self.dl, 'taggers', 'pkg.zip')))
+
+    def test_md5_mismatch_is_not_extracted(self):
+        self._assert_rejected(self._package(
+            'pkg', [('pkg/a.txt', b'x')], checksum='0' * 32))
+
+    def test_sha256_mismatch_is_not_extracted(self):
+        # sha256 takes precedence over a (correct) md5 when the index has it.
+        self._assert_rejected(self._package(
+            'pkg', [('pkg/a.txt', b'x')], sha256_checksum='0' * 64))
+
+    def test_size_mismatch_is_not_extracted(self):
+        self._assert_rejected(self._package(
+            'pkg', [('pkg/a.txt', b'x')], size=1))
+
+    def test_matching_sha256_is_extracted_and_installed(self):
+        pkg = self._package('pkg', [('pkg/a.txt', b'x')])
+        pkg.sha256_checksum = _sha256(os.path.join(self.srv, 'pkg.zip'))
+        self.assertEqual(self._errors(self._install(pkg)), [])
+        self.assertTrue(
+            os.path.isfile(os.path.join(self.dl, 'taggers', 'pkg', 'a.txt')))
+        d = Downloader(download_dir=self.dl)
+        self.assertEqual(d.status(pkg, self.dl), Downloader.INSTALLED)
+
+    def test_status_uses_sha256_when_present(self):
+        pkg = self._package('pkg', [('pkg/a.txt', b'x')])
+        self.assertEqual(self._errors(self._install(pkg)), [])
+        pkg.sha256_checksum = '0' * 64
+        d = Downloader(download_dir=self.dl)
+        self.assertEqual(d.status(pkg, self.dl), Downloader.STALE)
