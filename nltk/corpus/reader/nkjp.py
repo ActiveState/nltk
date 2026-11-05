@@ -13,6 +13,7 @@ import tempfile
 from six import string_types
 
 from nltk.corpus.reader.util import concat
+from nltk.data import _path_within_root
 from nltk.corpus.reader.xmldocs import XMLCorpusReader, XMLCorpusView
 
 
@@ -99,9 +100,18 @@ class NKJPCorpusReader(XMLCorpusReader):
         """
         Add root if necessary to specified fileid.
         """
-        if self.root in fileid:
-            return fileid
-        return self.root + fileid
+        # CVE-2026-12072 / CVE-2026-62385: fileids reach the builtin open()
+        # via string concatenation, so a '..' sequence, an absolute path or
+        # a symlink could escape the corpus root.  Resolve the candidate
+        # against the root and refuse anything that leaves it.
+        root = os.path.abspath(getattr(self._root, 'path', self._root))
+        if os.path.isabs(fileid):
+            result = fileid
+        else:
+            result = os.path.join(root, fileid)
+        if not _path_within_root(result, root):
+            raise ValueError('NKJP fileid escapes the corpus root: %r' % (fileid,))
+        return result
 
     @_parse_args
     def header(self, fileids=None, **kwargs):

@@ -137,3 +137,104 @@ class CorpusReaderSymlinkTest(_TreeTestBase):
         os.symlink(table, os.path.join(root, 'table.txt'))
         self.assertRaises(
             (ValueError, RuntimeError), CrubadanCorpusReader, root, ['table.txt'])
+
+
+_NKJP_HEADER = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<teiHeader>\n<fileDesc>\n<sourceDesc>\n<bibl>%s</bibl>\n'
+    '</sourceDesc>\n</fileDesc>\n</teiHeader>\n'
+)
+
+
+class NKJPTraversalTest(_TreeTestBase):
+    """CVE-2026-12072 / GHSA-6hm5-jgcp-p838 and the NKJP half of
+    CVE-2026-62385 / GHSA-568f-pv23-39p4"""
+
+    def setUp(self):
+        _TreeTestBase.setUp(self)
+        self.root = os.path.join(self.tmp, 'nkjp')
+        os.makedirs(os.path.join(self.root, 'WilkDom'))
+        self._write(
+            os.path.join(self.root, 'WilkDom', 'header.xml'), _NKJP_HEADER % 'IN')
+        os.makedirs(os.path.join(self.outside, 'x'))
+        self._write(
+            os.path.join(self.outside, 'x', 'header.xml'), _NKJP_HEADER % 'OUT')
+
+    def _reader(self):
+        from nltk.corpus.reader import NKJPCorpusReader
+
+        return NKJPCorpusReader(root=self.root, fileids='')
+
+    def test_legitimate_fileids_still_work(self):
+        reader = self._reader()
+        self.assertTrue(reader.header())
+        self.assertTrue(reader.header(fileids=['WilkDom/']))
+
+    def test_traversal_fileids_are_refused(self):
+        reader = self._reader()
+        for fileid in (
+            '../outside/x/',
+            self.root + '/../outside/x/',
+            os.path.join(self.outside, 'x') + '/',
+            '/etc/..' + self.root + '/../outside/x/',
+        ):
+            self.assertRaises(ValueError, reader.header, fileids=[fileid])
+
+    @unittest.skipUnless(hasattr(os, 'symlink'), 'os.symlink not available')
+    def test_symlinked_dir_outside_root_is_refused(self):
+        os.symlink(os.path.join(self.outside, 'x'), os.path.join(self.root, 'ln'))
+        self.assertRaises(ValueError, self._reader().header, fileids=['ln/'])
+
+
+class FramenetTraversalTest(_TreeTestBase):
+    """CVE-2026-12074 / GHSA-xh95-f55m-82fw and the FrameNet half of
+    CVE-2026-62385 / GHSA-568f-pv23-39p4"""
+
+    def setUp(self):
+        _TreeTestBase.setUp(self)
+        from nltk.corpus.reader.framenet import FramenetCorpusReader
+
+        self.root = os.path.join(self.tmp, 'framenet')
+        os.makedirs(os.path.join(self.root, 'frame'))
+        self._write(
+            os.path.join(self.outside, 'evil.xml'),
+            '<frame ID="1" name="evil"><definition>SECRET</definition></frame>')
+        self.fn = FramenetCorpusReader(self.root, [])
+        # Skip building the frame index from (absent) corpus files.
+        self.fn._frame_idx = {0: None}
+
+    def _assert_invalid(self, func, *args):
+        from nltk.corpus.reader.framenet import FramenetError
+
+        try:
+            func(*args)
+        except FramenetError as e:
+            self.assertIn('Invalid', str(e))
+        else:
+            self.fail('%r was not refused' % (args,))
+
+    def test_frame_name_traversal_is_refused(self):
+        for name in ('../../outside/evil', '../evil', 'C:evil', 'a\\b', 'a/b'):
+            self._assert_invalid(self.fn.frame_by_name, name)
+
+    def test_unknown_frame_still_reports_unknown(self):
+        from nltk.corpus.reader.framenet import FramenetError
+
+        try:
+            self.fn.frame_by_name('Missing')
+        except FramenetError as e:
+            self.assertIn('Unknown frame', str(e))
+        else:
+            self.fail('expected FramenetError')
+
+    def test_doc_filename_from_index_is_checked(self):
+        from nltk.corpus.reader.framenet import AttrDict
+
+        self.fn._fulltext_idx = {7: AttrDict(filename='../../outside/evil.xml')}
+        self._assert_invalid(self.fn.doc, 7)
+
+    def test_lu_id_from_corpus_data_is_checked(self):
+        from nltk.corpus.reader.framenet import AttrDict
+
+        self.fn._lu_idx = {0: None}
+        self._assert_invalid(self.fn._lu_file, AttrDict(ID='../../outside/evil'))
