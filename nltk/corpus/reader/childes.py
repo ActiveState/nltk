@@ -17,6 +17,7 @@ import re
 from collections import defaultdict
 from six import string_types
 
+from nltk import xmlsec as _xmlsec
 from nltk.util import flatten, LazyMap, LazyConcatenation
 
 from nltk.corpus.reader.util import concat
@@ -219,7 +220,7 @@ class CHILDESCorpusReader(XMLCorpusReader):
 
     def _get_corpus(self, fileid):
         results = dict()
-        xmldoc = ElementTree.parse(fileid).getroot()
+        xmldoc = _xmlsec.parse(fileid).getroot()
         for key, value in xmldoc.items():
             results[key] = value
         return results
@@ -239,7 +240,7 @@ class CHILDESCorpusReader(XMLCorpusReader):
         def dictOfDicts():
             return defaultdict(dictOfDicts)
 
-        xmldoc = ElementTree.parse(fileid).getroot()
+        xmldoc = _xmlsec.parse(fileid).getroot()
         # getting participants' data
         pat = dictOfDicts()
         for participant in xmldoc.findall(
@@ -265,7 +266,7 @@ class CHILDESCorpusReader(XMLCorpusReader):
         return LazyMap(get_age, self.abspaths(fileids))
 
     def _get_age(self, fileid, speaker, month):
-        xmldoc = ElementTree.parse(fileid).getroot()
+        xmldoc = _xmlsec.parse(fileid).getroot()
         for pat in xmldoc.findall('.//{%s}Participants/{%s}participant' % (NS, NS)):
             try:
                 if pat.get('id') == speaker:
@@ -357,7 +358,7 @@ class CHILDESCorpusReader(XMLCorpusReader):
             isinstance(speaker, string_types) and speaker != 'ALL'
         ):  # ensure we have a list of speakers
             speaker = [speaker]
-        xmldoc = ElementTree.parse(fileid).getroot()
+        xmldoc = _xmlsec.parse(fileid).getroot()
         # processing each xml doc
         results = []
         for xmlsent in xmldoc.findall('.//{%s}u' % NS):

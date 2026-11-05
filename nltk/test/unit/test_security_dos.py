@@ -147,3 +147,46 @@ class TestRecursiveDescentBound(unittest.TestCase):  # GHSA-ff5c-cp5c-9wjf
             self.assertRaises(ParseTimeoutError, lambda: list(p.parse(['a'] * 24)))
             self.assertLess(time.time() - t, 3.0)
         self.assertEqual(len(list(RecursiveDescentParser(g).parse(['a'] * 5))), 9)
+
+
+class TestXMLSec(unittest.TestCase):  # GHSA-97qj-x29f-37w7
+    BOMB = ('<?xml version="1.0"?><!DOCTYPE l [<!ENTITY l0 "lol">'
+            '<!ENTITY l1 "&l0;&l0;&l0;&l0;&l0;&l0;&l0;&l0;&l0;&l0;">]><l>&l1;</l>')
+
+    def _both_backends(self):
+        import nltk.xmlsec as X
+        yield X
+        saved = X.HAVE_DEFUSEDXML
+        X.HAVE_DEFUSEDXML = False
+        try:
+            yield X
+        finally:
+            X.HAVE_DEFUSEDXML = saved
+
+    def test_entities_rejected(self):
+        for X in self._both_backends():
+            self.assertRaises(ValueError, X.fromstring, self.BOMB)
+            self.assertRaises(ValueError, X.parse, io.BytesIO(self.BOMB.encode('ascii')))
+            self.assertEqual(X.fromstring('<!DOCTYPE c SYSTEM "x.dtd"><c>&amp;&#65;</c>').text, '&A')
+
+    def test_element_wrapper(self):
+        from nltk.internals import ElementWrapper
+        self.assertRaises(ValueError, ElementWrapper, str(self.BOMB))
+
+    def test_corpus_reader_and_downloader_parse_paths(self):
+        import os
+        import shutil
+        import tempfile
+        from nltk.corpus.reader import XMLCorpusReader
+        from nltk.downloader import Package
+
+        tmp = tempfile.mkdtemp()
+        try:
+            path = os.path.join(tmp, 'bomb.xml')
+            with open(path, 'w') as f:
+                f.write(self.BOMB)
+            reader = XMLCorpusReader(tmp, ['bomb.xml'])
+            self.assertRaises(ValueError, reader.xml, 'bomb.xml')
+            self.assertRaises(ValueError, Package.fromxml, path)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)

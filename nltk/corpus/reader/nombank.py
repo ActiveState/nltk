@@ -12,6 +12,7 @@ from functools import total_ordering
 
 from six import string_types
 
+from nltk import xmlsec as _xmlsec
 from nltk.tree import Tree
 from nltk.internals import raise_unorderable_types
 from nltk.compat import python_2_unicode_compatible
@@ -122,7 +123,7 @@ class NombankCorpusReader(CorpusReader):
 
         # n.b.: The encoding for XML fileids is specified by the file
         # itself; so we ignore self._encoding here.
-        etree = ElementTree.parse(self.abspath(framefile).open()).getroot()
+        etree = _xmlsec.parse(self.abspath(framefile).open()).getroot()
         for roleset in etree.findall('predicate/roleset'):
             if roleset.attrib['id'] == roleset_id:
                 return roleset
@@ -144,7 +145,7 @@ class NombankCorpusReader(CorpusReader):
         for framefile in framefiles:
             # n.b.: The encoding for XML fileids is specified by the file
             # itself; so we ignore self._encoding here.
-            etree = ElementTree.parse(self.abspath(framefile).open()).getroot()
+            etree = _xmlsec.parse(self.abspath(framefile).open()).getroot()
             rsets.append(etree.findall('predicate/roleset'))
         return LazyConcatenation(rsets)
 

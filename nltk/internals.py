@@ -966,7 +966,10 @@ class ElementWrapper(object):
 
         """
         if isinstance(etree, string_types):
-            etree = ElementTree.fromstring(etree)
+            # CVE-2026-78681: refuse entity declarations (billion laughs).
+            from nltk.xmlsec import fromstring as _safe_fromstring
+
+            etree = _safe_fromstring(etree)
         self.__dict__['_etree'] = etree
 
     def unwrap(self):

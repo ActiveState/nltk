@@ -22,6 +22,7 @@ except ImportError:
 
 from six import string_types
 
+from nltk import xmlsec as _xmlsec
 from nltk.data import SeekableUnicodeStreamReader
 from nltk.tokenize import WordPunctTokenizer
 from nltk.internals import ElementWrapper
@@ -50,7 +51,7 @@ class XMLCorpusReader(CorpusReader):
         if not isinstance(fileid, string_types):
             raise TypeError('Expected a single file identifier string')
         # Read the XML in using ElementTree.
-        elt = ElementTree.parse(self.abspath(fileid).open()).getroot()
+        elt = _xmlsec.parse(self.abspath(fileid).open()).getroot()
         # If requested, wrap it.
         if self._wrap_etree:
             elt = ElementWrapper(elt)
