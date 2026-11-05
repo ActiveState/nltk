@@ -103,3 +103,26 @@ class TestSexprBlockGrowth(unittest.TestCase):  # same upstream change (7808692d
         tokens = read_sexpr_block(stream, block_size=1024)
         self.assertLess(time.time() - t, 1.0)
         self.assertEqual(tokens, [text])
+
+
+class TestPl196x(unittest.TestCase):  # GHSA-8mpw-7fpc-4gqj
+    def _view(self, textids=None):
+        from nltk.corpus.reader.pl196x import TEICorpusView
+        v = TEICorpusView.__new__(TEICorpusView)
+        v._pagesize, v._textids, v._tagged = 4096, textids, False
+        v._group_by_sent = v._group_by_para = False
+        return v
+
+    def test_benign(self):
+        body = '<text id="t1"><p><s><w>a</w><c>,</c></s></p></text>\n'
+        self.assertEqual(self._view().read_block(io.StringIO(body)), ['a', ','])
+
+    def test_unclosed_tags(self):
+        for tag in ('<p>', '<w>'):  # unpatched: ~15s for 20000 '<p>'
+            self.assertLess(_elapsed(lambda: self._view().read_block(
+                io.StringIO('<text id="t">' + tag * 200000 + '</text>'))), 3.0)
+
+    def test_textid_filter(self):
+        body = ''.join('<text id="t%d">x</text>' % i for i in range(80000))
+        self.assertLess(_elapsed(lambda: self._view(set(['z'])).read_block(
+            io.StringIO(body))), 3.0)
