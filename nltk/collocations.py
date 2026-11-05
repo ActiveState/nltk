@@ -386,16 +386,30 @@ def demo(scorer=None, compare_scorer=None):
 # bigram_measures = BigramAssocMeasures()
 # trigram_measures = TrigramAssocMeasures()
 
-if __name__ == '__main__':
-    import sys
+def _scorer_from_name(name):
+    """
+    Look up a BigramAssocMeasures scoring function by name for the command
+    line demo.  CVE-2025-71408 / GHSA-848c-c2cx-j7qx: this used to
+    ``eval('BigramAssocMeasures.' + name)``, so a crafted argument executed
+    arbitrary Python.  Only public attributes are resolved; anything else
+    yields None (the demo's default scorer).
+    """
     from nltk.metrics import BigramAssocMeasures
 
+    if not name or name.startswith('_'):
+        return None
+    return getattr(BigramAssocMeasures, name, None)
+
+
+if __name__ == '__main__':
+    import sys
+
     try:
-        scorer = eval('BigramAssocMeasures.' + sys.argv[1])
+        scorer = _scorer_from_name(sys.argv[1])
     except IndexError:
         scorer = None
     try:
-        compare_scorer = eval('BigramAssocMeasures.' + sys.argv[2])
+        compare_scorer = _scorer_from_name(sys.argv[2])
     except IndexError:
         compare_scorer = None
 
