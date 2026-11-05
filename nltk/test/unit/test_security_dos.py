@@ -133,3 +133,17 @@ class TestFeatStructDepth(unittest.TestCase):  # GHSA-cw6x-m8jw-qmrh
         from nltk.featstruct import FeatStruct
         self.assertRaises(ValueError, FeatStruct, '[a=' * 5000 + '1' + ']' * 5000)
         self.assertEqual(FeatStruct('[a=[b=1]]')['a']['b'], 1)
+
+
+class TestRecursiveDescentBound(unittest.TestCase):  # GHSA-ff5c-cp5c-9wjf
+    def test_ambiguous_grammar_times_out(self):
+        from nltk import CFG
+        from nltk.parse.recursivedescent import (
+            RecursiveDescentParser, SteppingRecursiveDescentParser, ParseTimeoutError)
+        g = CFG.fromstring("S -> 'a' S | 'a' S S | 'a'")
+        for cls in (RecursiveDescentParser, SteppingRecursiveDescentParser):
+            p = cls(g, max_time=0.5)
+            t = time.time()
+            self.assertRaises(ParseTimeoutError, lambda: list(p.parse(['a'] * 24)))
+            self.assertLess(time.time() - t, 3.0)
+        self.assertEqual(len(list(RecursiveDescentParser(g).parse(['a'] * 5))), 9)

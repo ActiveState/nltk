@@ -7,11 +7,20 @@
 # For license information, see LICENSE.TXT
 from __future__ import print_function, unicode_literals
 
+import time
+
 from nltk.grammar import Nonterminal
 from nltk.tree import Tree, ImmutableTree
 from nltk.compat import unicode_repr
 
 from nltk.parse.api import ParserI
+
+#: Default wall-clock limit (seconds) for one parse (CWE-407/CWE-674).
+DEFAULT_MAX_TIME = 5.0
+
+
+class ParseTimeoutError(RuntimeError):
+    """Raised when a recursive-descent parse exceeds ``max_time``."""
 
 ##//////////////////////////////////////////////////////
 ##  Recursive Descent Parser
@@ -52,7 +61,7 @@ class RecursiveDescentParser(ParserI):
     :see: ``nltk.grammar``
     """
 
-    def __init__(self, grammar, trace=0):
+    def __init__(self, grammar, trace=0, max_time=DEFAULT_MAX_TIME):
         """
         Create a new ``RecursiveDescentParser``, that uses ``grammar``
         to parse texts.
@@ -67,6 +76,8 @@ class RecursiveDescentParser(ParserI):
         """
         self._grammar = grammar
         self._trace = trace
+        self._max_time = max_time
+        self._parse_deadline = None
 
     def grammar(self):
         return self._grammar
@@ -84,6 +95,7 @@ class RecursiveDescentParser(ParserI):
         frontier = [()]
         if self._trace:
             self._trace_start(initial_tree, frontier, tokens)
+        self._parse_deadline = None
         return self._parse(tokens, initial_tree, frontier)
 
     def _parse(self, remaining_text, tree, frontier):
@@ -110,6 +122,17 @@ class RecursiveDescentParser(ParserI):
             leaves that have not yet been matched.  This list sorted
             in left-to-right order of location within the tree.
         """
+        if self._max_time is not None:
+            now = time.time()
+            if self._parse_deadline is None:
+                self._parse_deadline = now + self._max_time
+            elif now > self._parse_deadline:
+                raise ParseTimeoutError(
+                    'RecursiveDescentParser exceeded its %ss time limit; the '
+                    'grammar may be ambiguous or left-recursive (pass '
+                    'max_time=None to disable)' % self._max_time
+                )
+
 
         # If the tree covers the text, and there's nothing left to
         # expand, then we've found a complete parse; return it.
@@ -373,8 +396,10 @@ class SteppingRecursiveDescentParser(RecursiveDescentParser):
     :see: ``nltk.grammar``
     """
 
-    def __init__(self, grammar, trace=0):
-        super(SteppingRecursiveDescentParser, self).__init__(grammar, trace)
+    def __init__(self, grammar, trace=0, max_time=DEFAULT_MAX_TIME):
+        super(SteppingRecursiveDescentParser, self).__init__(
+            grammar, trace, max_time=max_time
+        )
         self._rtext = None
         self._tree = None
         self._frontier = [()]
@@ -394,8 +419,16 @@ class SteppingRecursiveDescentParser(RecursiveDescentParser):
     def parse(self, tokens):
         tokens = list(tokens)
         self.initialize(tokens)
+        # step() bypasses the _parse deadline; bound the loop directly.
+        deadline = None
+        if self._max_time is not None:
+            deadline = time.time() + self._max_time
         while self.step() is not None:
-            pass
+            if deadline is not None and time.time() > deadline:
+                raise ParseTimeoutError(
+                    'SteppingRecursiveDescentParser exceeded its %ss time '
+                    'limit (pass max_time=None to disable)' % self._max_time
+                )
         return self.parses()
 
     def initialize(self, tokens):
