@@ -28,6 +28,7 @@ Release versions now use the PEP 440 post-release form (3.4.5.postN).
 | CVE-2026-81724 | GHSA-cw6x-m8jw-qmrh | Patched - FeatStructReader MAX_DEPTH |
 | CVE-2026-12876 | GHSA-ff5c-cp5c-9wjf | Patched - RecursiveDescentParser max_time (default 5s) (#3649) |
 | CVE-2026-78681 | GHSA-97qj-x29f-37w7 | Patched - new nltk.xmlsec refuses XML entity declarations |
+| (none) | upstream #3100 | Patched - WordNet browser Reference.decode unpickles URL data through an allowlist that admits only set (remote code execution via the local browser server) |
 | CVE-2026-79657 | GHSA-x99w-6fgc-pmfw | Not affected - the allowlisted pickle loaders it bypasses do not exist in 3.4.5; the new TransitionParser loader uses exact (module, name) pairs |
 | CVE-2026-65915 | GHSA-72r2-7mfr-5xr9 | Not affected - nltk.pathsec and its dead check do not exist in 3.4.5 |
 | CVE-2026-79674 | GHSA-3gq4-3j92-5w49 | Not affected - bypass of the pathsec data-root allowlist, absent in 3.4.5; in-root containment is patched above |
@@ -76,6 +77,12 @@ Notes:
   tgrep compile patterns supplied by the caller. Upstream bounds them with
   the third-party regex module's timeout, which no Python 2 release of
   regex provides. Do not pass untrusted patterns to these APIs.
+* WordNet browser (nltk/app/wordnet_app.py): Reference.decode called
+  pickle.loads on a base64 value from the request URL. No advisory covers
+  it; upstream fixed it in #3100 by refusing every global. On Python 2,
+  protocol 2 pickles a set as the global __builtin__.set, so that port
+  would break every link with an expanded relation; this release allows
+  exactly set and refuses everything else.
 * Regression tests: nltk/test/unit/test_security_*.py.
 
 Thanks to the following contributors to 3.4.5.post3:

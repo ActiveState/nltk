@@ -97,3 +97,53 @@ class GraphvizDotSearchPathTest(unittest.TestCase):
         for render in self._renderers():
             self.assertIn('<svg/>', render())
         self.assertFalse(os.path.exists(self.marker))
+
+
+class WordNetBrowserReferenceUnpickleTest(unittest.TestCase):
+    """WordNet browser Reference.decode (upstream #3100, no advisory id)"""
+
+    def setUp(self):
+        from nltk.app import wordnet_app
+        self.app = wordnet_app
+        self.tmp = tempfile.mkdtemp()
+        self.marker = os.path.join(self.tmp, 'PWNED')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_round_trip_with_expanded_relations(self):
+        ref = self.app.Reference('dog', {'dog.n.01': set(['hypernym', 'hyponym'])})
+        back = self.app.Reference.decode(ref.encode())
+        self.assertEqual(back.word, 'dog')
+        self.assertEqual(back.synset_relations,
+                         {'dog.n.01': set(['hypernym', 'hyponym'])})
+
+    def test_round_trip_without_relations(self):
+        back = self.app.Reference.decode(self.app.Reference('cat').encode())
+        self.assertEqual(back.word, 'cat')
+        self.assertEqual(back.synset_relations, {})
+
+    def test_url_payload_does_not_execute(self):
+        import base64
+        import pickle
+
+        marker = self.marker
+
+        class Exploit(object):
+            def __reduce__(self):
+                return (os.mkdir, (marker,))
+
+        for proto in range(0, pickle.HIGHEST_PROTOCOL + 1):
+            blob = pickle.dumps((Exploit(), {}), proto)
+            encoded = base64.urlsafe_b64encode(blob).decode()
+            with self.assertRaises(pickle.UnpicklingError):
+                self.app.Reference.decode(encoded)
+            self.assertFalse(os.path.exists(marker))
+
+    def test_other_builtins_refused(self):
+        import base64
+        import pickle
+
+        blob = pickle.dumps(('w', {'x': frozenset(['a'])}), 2)
+        with self.assertRaises(pickle.UnpicklingError):
+            self.app.Reference.decode(base64.urlsafe_b64encode(blob).decode())
