@@ -2449,13 +2449,25 @@ class FeatStructReader(object):
         else:
             return self.read_value(s, position, reentrances)
 
+    #: Maximum nesting depth accepted by the reader (CWE-674).
+    MAX_DEPTH = 100
+
     def read_value(self, s, position, reentrances):
-        for (handler, regexp) in self.VALUE_HANDLERS:
-            match = regexp.match(s, position)
-            if match:
-                handler_func = getattr(self, handler)
-                return handler_func(s, position, reentrances, match)
-        raise ValueError('value', position)
+        self._depth = getattr(self, '_depth', 0) + 1
+        try:
+            if self._depth > self.MAX_DEPTH:
+                raise ValueError(
+                    'Feature structure nesting depth exceeds MAX_DEPTH (%d)'
+                    % self.MAX_DEPTH
+                )
+            for (handler, regexp) in self.VALUE_HANDLERS:
+                match = regexp.match(s, position)
+                if match:
+                    handler_func = getattr(self, handler)
+                    return handler_func(s, position, reentrances, match)
+            raise ValueError('value', position)
+        finally:
+            self._depth -= 1
 
     def _error(self, s, expected, position):
         lines = s.split('\n')

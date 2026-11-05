@@ -126,3 +126,10 @@ class TestPl196x(unittest.TestCase):  # GHSA-8mpw-7fpc-4gqj
         body = ''.join('<text id="t%d">x</text>' % i for i in range(80000))
         self.assertLess(_elapsed(lambda: self._view(set(['z'])).read_block(
             io.StringIO(body))), 3.0)
+
+
+class TestFeatStructDepth(unittest.TestCase):  # GHSA-cw6x-m8jw-qmrh
+    def test_deep_nesting_raises_valueerror(self):
+        from nltk.featstruct import FeatStruct
+        self.assertRaises(ValueError, FeatStruct, '[a=' * 5000 + '1' + ']' * 5000)
+        self.assertEqual(FeatStruct('[a=[b=1]]')['a']['b'], 1)
