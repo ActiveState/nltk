@@ -1,3 +1,81 @@
+Version 3.4.5.post3 2026-11-04
+
+ActiveState security release on the 3.4.5 line (Python 2.7 compatible).
+Release versions now use the PEP 440 post-release form (3.4.5.postN).
+
+| CVE | Advisory | Status |
+|-----|----------|--------|
+| CVE-2026-12261 | GHSA-ffj6-66c4-86gw | Patched - downloader rejects zip members outside the package's own directory (#3625) |
+| CVE-2026-12259, CVE-2026-63310 | GHSA-5wp5-5229-5g6q | Patched - downloader verifies size + sha256/md5 before extracting (#3449, #3625) |
+| CVE-2026-81727 | GHSA-f794-5jv7-7672 | Patched - extraction refuses hardlinked (st_nlink > 1) targets (#3797) |
+| CVE-2026-78683 | GHSA-rhp5-r9x4-f5g2 | Patched - TransitionParser models load through an exact-allowlist unpickler (#3631) |
+| CVE-2026-54293 | GHSA-p4gq-832x-fm9v | Patched - nltk.data.find/load reject '..' and percent-encoded traversal (#3575) |
+| CVE-2026-12243 | GHSA-m42h-3232-vpv3 | Patched - same change as CVE-2026-54293 (#3522) |
+| CVE-2026-70626 | GHSA-r6gq-whwq-mvg9 | Patched - corpus path containment resolves symlinks (#3522) |
+| CVE-2026-79676 | GHSA-p4rw-rvv2-7xwr | Patched - same change; crubadan/mte/ipipan string paths routed through it |
+| CVE-2026-12074 | GHSA-xh95-f55m-82fw | Patched - FramenetCorpusReader frame/doc/LU names validated (#3581) |
+| CVE-2026-12072 | GHSA-6hm5-jgcp-p838 | Patched - NKJPCorpusReader.add_root() contains fileids (#3579) |
+| CVE-2026-62385 | GHSA-568f-pv23-39p4 | Patched - FrameNet + NKJP changes above |
+| CVE-2025-71408 | GHSA-848c-c2cx-j7qx | Patched - collocations CLI uses getattr, not eval (#3465) |
+| CVE-2026-78680 | GHSA-6hwm-xvph-95vm | Patched - Graphviz dot run by absolute path from absolute PATH entries |
+| CVE-2026-12061 | GHSA-fg7f-2386-8897 | Patched - linear ReviewsCorpusReader feature extraction (#3583) |
+| CVE-2026-72818 | GHSA-qx2g-xrx7-vfh8 | Patched - bounded TweetTokenizer URL/email regexes (#3701) |
+| CVE-2026-81722 | GHSA-ww6m-cw3f-q94g | Patched - linear PorterStemmer consonant test (#3633) |
+| CVE-2026-81723 | GHSA-vp2x-qp44-57v7 | Patched - linear XMLCorpusView._read_xml_fragment |
+| CVE-2026-81725 | GHSA-8mpw-7fpc-4gqj | Patched - linear Pl196x TEICorpusView.read_block |
+| CVE-2026-81724 | GHSA-cw6x-m8jw-qmrh | Patched - FeatStructReader MAX_DEPTH |
+| CVE-2026-12876 | GHSA-ff5c-cp5c-9wjf | Patched - RecursiveDescentParser max_time (default 5s) (#3649) |
+| CVE-2026-78681 | GHSA-97qj-x29f-37w7 | Patched - new nltk.xmlsec refuses XML entity declarations |
+| CVE-2026-79657 | GHSA-x99w-6fgc-pmfw | Not affected - the allowlisted pickle loaders it bypasses do not exist in 3.4.5; the new TransitionParser loader uses exact (module, name) pairs |
+| CVE-2026-65915 | GHSA-72r2-7mfr-5xr9 | Not affected - nltk.pathsec and its dead check do not exist in 3.4.5 |
+| CVE-2026-79674 | GHSA-3gq4-3j92-5w49 | Not affected - bypass of the pathsec data-root allowlist, absent in 3.4.5; in-root containment is patched above |
+| CVE-2026-63312 | GHSA-x5ph-mj9p-rfr8 | Not affected - pathsec absent; the readers that built string paths from untrusted input are patched above |
+| CVE-2026-62388 | GHSA-p3m8-78j2-g5p3 | Not affected - pathsec.ENFORCE does not exist in 3.4.5 |
+| CVE-2026-81726 | GHSA-8mgp-746c-j5xp | Not affected - the model-artifact APIs and pathsec it bypasses do not exist in 3.4.5 |
+| CVE-2026-12075 | GHSA-qvv7-cg9c-w4x3 | Not affected - bypass of the pathsec SSRF filter, absent in 3.4.5 |
+| CVE-2026-12372 | GHSA-2jhm-w3mp-jcwr | Not affected - bypass of the pathsec SSRF filter, absent in 3.4.5 |
+| CVE-2026-63311 | GHSA-3gqm-fcw5-w839 | Not affected - bypass of the pathsec SSRF filter, absent in 3.4.5 |
+| CVE-2026-78682 | GHSA-6ww7-3frv-cqxh | Not affected - bypass of the pathsec SSRF filter, absent in 3.4.5 |
+| CVE-2026-79675 | GHSA-m4rf-3fr8-xwx3 | Not affected - java() has no per-call options argument or option validator in 3.4.5 |
+| CVE-2026-109956 | GHSA-j456-xh4h-cpf2 | Not affected - bypass of pathsec containment, absent in 3.4.5; the model path is passed as a value argument, not an option |
+| CVE-2026-0848 | PYSEC-2026-99 | Deferred - Stanford JAR verification; java() cannot run on Python 2.7 in this release (subprocess.DEVNULL), see notes |
+| CVE-2026-12252 | GHSA-9r6g-266r-89x4 | Deferred - as CVE-2026-0848 |
+| CVE-2026-80205 | GHSA-rrv8-h7p8-rx55 | Deferred - caller-supplied regex; upstream's fix needs a regex-module timeout that has no Python 2 equivalent |
+| CVE-2026-80206 | GHSA-w3v8-gmh9-3wv7 | Deferred - as CVE-2026-80205 (tgrep) |
+| CVE-2025-14009 | GHSA-7p94-766c-hgjp | Patched (3.4.5+security.2) |
+| CVE-2026-33236 | GHSA-469j-vmhf-r6v7 | Patched (3.4.5+security.2) |
+| CVE-2026-0847 | GHSA-68j8-pq59-fqgm | Patched (3.4.5+security.2) |
+| CVE-2026-0846 | GHSA-h8wq-7xc4-p3qx | Patched (3.4.5+security.2) |
+| CVE-2026-33231 | GHSA-jm6w-m3j8-898g | Patched (3.4.5+security.2) |
+| CVE-2026-33230 | GHSA-gfwx-w7gr-fvh7 | Patched (3.4.5+security.2) |
+| CVE-2026-66393 | GHSA-rf74-v2fm-23pw | Patched (3.4.5+security.2) |
+| CVE-2024-39705 | GHSA-cgvx-9447-vcch | Documented, not remediable in place (3.4.5+security.2) |
+| CVE-2021-43854 | GHSA-f8m6-h2c7-8h9x | Patched (3.4.5.1) |
+| CVE-2021-3842 | GHSA-rqjh-jp2r-59cj | Patched (3.4.5.1) |
+| CVE-2021-3828 | GHSA-2ww3-fxvq-293j | Patched (3.4.5.1) |
+
+Notes:
+* Behaviour changes: nltk.data.find/load raise ValueError for resource
+  names containing '..' (literal or percent-encoded); corpus readers raise
+  ValueError for paths that resolve outside the corpus root (including via
+  symlinks); RecursiveDescentParser and SteppingRecursiveDescentParser stop
+  with ParseTimeoutError after max_time seconds (default 5.0, None
+  disables); whole-document XML parses refuse entity declarations;
+  FeatStructReader refuses nesting deeper than MAX_DEPTH (100).
+* CVE-2026-0848 / CVE-2026-12252: in this release nltk.internals.java()
+  raises AttributeError (subprocess.DEVNULL) on Python 2.7 before starting
+  a JVM, so the Stanford/CoreNLP/Weka wrappers cannot run there. Upstream's
+  fix is a classpath location allowlist that would reject installs outside
+  nltk_data; it is deferred.
+* CVE-2026-80205 / CVE-2026-80206: Text.findall, TokenSearcher.findall and
+  tgrep compile patterns supplied by the caller. Upstream bounds them with
+  the third-party regex module's timeout, which no Python 2 release of
+  regex provides. Do not pass untrusted patterns to these APIs.
+* Regression tests: nltk/test/unit/test_security_*.py.
+
+Thanks to the following contributors to 3.4.5.post3:
+ActiveState
+
 Version 3.4.5+security.2 2026-06-08
 
 * Validate zip members before extraction in the downloader to prevent zip-slip
