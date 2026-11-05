@@ -64,3 +64,16 @@ class TestTweetTokenizer(unittest.TestCase):  # GHSA-qx2g-xrx7-vfh8
             'see https://foo.example.com/a_(b)_c?x=1 mail a.b+c@ex-ample.co.uk')
         self.assertIn('https://foo.example.com/a_(b)_c?x=1', toks)
         self.assertIn('a.b+c@ex-ample.co.uk', toks)
+
+
+class TestPorterYRun(unittest.TestCase):  # GHSA-ww6m-cw3f-q94g
+    def test_outputs(self):
+        from nltk.stem.porter import PorterStemmer
+        p = PorterStemmer()
+        self.assertEqual([p.stem(w) for w in ['ponies', 'happy', 'sky', 'syzygy']],
+                         ['poni', 'happi', 'sky', 'syzygi'])
+
+    def test_long_y_run(self):
+        from nltk.stem.porter import PorterStemmer
+        # unpatched: RuntimeError (recursion) at ~1000 'y'; quadratic below
+        self.assertLess(_elapsed(lambda: PorterStemmer().stem('y' * 40000 + 'ness')), 2.0)
