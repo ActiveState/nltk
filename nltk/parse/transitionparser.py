@@ -27,6 +27,76 @@ except ImportError:
 from nltk.parse import ParserI, DependencyGraph, DependencyEvaluator
 
 
+# CVE-2026-78683 / GHSA-rhp5-r9x4-f5g2: TransitionParser.parse() used to
+# pickle.load() the model file unrestricted, so a crafted model file ran
+# arbitrary code.  A fitted sklearn SVC only needs the exact globals below
+# (collected with pickletools from models pickled by Python 2.7 / sklearn
+# 0.20 at protocols 0 and 2, plus the Python 3 / newer-library spellings).
+# Exact (module, name) pairs, never module prefixes: whole namespaces such as
+# numpy expose code-execution gadgets (CVE-2026-79657 / GHSA-x99w-6fgc-pmfw).
+_MODEL_ALLOWED_GLOBALS = frozenset(
+    [
+        ('copy_reg', '_reconstructor'),
+        ('copyreg', '_reconstructor'),
+        ('__builtin__', 'object'),
+        ('builtins', 'object'),
+        ('__builtin__', 'int'),
+        ('builtins', 'int'),
+        ('__builtin__', 'float'),
+        ('builtins', 'float'),
+        ('collections', 'defaultdict'),
+        ('collections', 'OrderedDict'),
+        ('sklearn.svm.classes', 'SVC'),
+        ('sklearn.svm._classes', 'SVC'),
+        ('numpy', 'ndarray'),
+        ('numpy', 'dtype'),
+        ('numpy.core.multiarray', '_reconstruct'),
+        ('numpy._core.multiarray', '_reconstruct'),
+        ('numpy.core.multiarray', 'scalar'),
+        ('numpy._core.multiarray', 'scalar'),
+        ('numpy.core.numeric', '_frombuffer'),
+        ('numpy._core.numeric', '_frombuffer'),
+        ('scipy.sparse.csr', 'csr_matrix'),
+        ('scipy.sparse._csr', 'csr_matrix'),
+        ('scipy.sparse.csc', 'csc_matrix'),
+        ('scipy.sparse._csc', 'csc_matrix'),
+    ]
+)
+
+
+def _guarded_numpy_scalar(scalar):
+    # numpy's scalar reconstructor un-pickles the payload of an object dtype
+    # scalar with the unrestricted unpickler; a fitted SVC never holds one.
+    def _scalar(dtype, *args):
+        if getattr(dtype, 'hasobject', False):
+            raise pickle.UnpicklingError(
+                'transition parser model holds an object dtype numpy scalar; '
+                'refusing to load it')
+        return scalar(dtype, *args)
+
+    return _scalar
+
+
+class _ModelUnpickler(pickle.Unpickler):
+    """Unpickler that only resolves the globals a fitted SVC model needs."""
+
+    def find_class(self, module, name):
+        if '.' in name or (module, name) not in _MODEL_ALLOWED_GLOBALS:
+            raise pickle.UnpicklingError(
+                'transition parser model references forbidden global %s.%s'
+                % (module, name))
+        # pickle.Unpickler is an old-style class on Python 2: no super().
+        obj = pickle.Unpickler.find_class(self, module, name)
+        if name == 'scalar':
+            obj = _guarded_numpy_scalar(obj)
+        return obj
+
+
+def _load_model(model_file):
+    with open(model_file, 'rb') as f:
+        return _ModelUnpickler(f).load()
+
+
 class Configuration(object):
     """
     Class for holding configuration which is the partial analysis of the input sentence.
@@ -553,7 +623,8 @@ class TransitionParser(ParserI):
         """
         result = []
         # First load the model
-        model = pickle.load(open(modelFile, 'rb'))
+        # CVE-2026-78683: allowlisting unpickler instead of pickle.load().
+        model = _load_model(modelFile)
         operation = Transition(self._algorithm)
 
         for depgraph in depgraphs:
