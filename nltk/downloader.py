@@ -764,7 +764,12 @@ class Downloader(object):
             # been unzipped (presumably a previous version).
             if info.unzip or os.path.exists(os.path.join(zipdir, info.id)):
                 yield StartUnzipMessage(info)
-                for msg in _unzip_iter(filepath, zipdir, verbose=False):
+                # CVE-2026-12261: pass info.id so _unzip_iter rejects any
+                # member whose top-level directory is not this package's own
+                # (blocks cross-package overwrite inside the shared subdir).
+                for msg in _unzip_iter(
+                    filepath, zipdir, verbose=False, expected_root=info.id
+                ):
                     # Somewhat of a hack, but we need a proper package reference
                     msg.package = info
                     yield msg
@@ -2268,7 +2273,7 @@ def unzip(filename, root, verbose=True):
             raise Exception(message)
 
 
-def _unzip_iter(filename, root, verbose=True):
+def _unzip_iter(filename, root, verbose=True, expected_root=None):
     if verbose:
         sys.stdout.write('Unzipping %s' % os.path.split(filename)[1])
         sys.stdout.flush()
@@ -2288,6 +2293,18 @@ def _unzip_iter(filename, root, verbose=True):
     root_real = os.path.realpath(root)
     for member in zf.infolist():
         name = member.filename.replace('\\', '/')
+        # CVE-2026-12261: when extracting a downloaded package, every member
+        # must live under the package's own top-level directory.  Otherwise a
+        # package could overwrite another package's files in the shared
+        # subdir (e.g. taggers/) without any '..' traversal.
+        if expected_root is not None:
+            top = name.lstrip('/').split('/')[0]
+            if top != expected_root:
+                yield ErrorMessage(
+                    filename,
+                    'Cross-package overwrite blocked: member %r is outside '
+                    'the owning package directory %r' % (name, expected_root))
+                return
         if name.startswith('/') or (':' in name.split('/')[0]):
             yield ErrorMessage(
                 filename, 'Unsafe zip entry (absolute path): %r' % name)
