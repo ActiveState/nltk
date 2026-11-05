@@ -683,6 +683,33 @@ def find_binary_iter(
         yield file
 
 
+def _find_trusted_binary(name):
+    """
+    Return the absolute path of executable ``name`` found on an absolute
+    ``PATH`` entry, or raise ``LookupError``.
+
+    CVE-2026-78680 / GHSA-6hwm-xvph-95vm: running a helper by bare name
+    (e.g. ``['dot', ...]``) lets the OS resolve it from the current
+    directory (Windows ``CreateProcess``) or from relative/empty ``PATH``
+    entries, so a planted ``./dot`` would run.  Empty and relative ``PATH``
+    entries are skipped and the command is run by absolute path.
+    """
+    if os.name == 'nt':
+        exts = [''] + [
+            e for e in os.environ.get('PATHEXT', '.EXE').split(os.pathsep) if e
+        ]
+    else:
+        exts = ['']
+    for directory in os.environ.get('PATH', '').split(os.pathsep):
+        if not directory or not os.path.isabs(directory):
+            continue
+        for ext in exts:
+            candidate = os.path.join(directory, name + ext)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    raise LookupError('%s not found on an absolute PATH entry' % name)
+
+
 def find_binary(
     name,
     path_to_bin=None,

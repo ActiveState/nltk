@@ -25,6 +25,7 @@ from six import string_types
 
 from nltk.tree import Tree
 from nltk.compat import python_2_unicode_compatible
+from nltk.internals import _find_trusted_binary
 
 
 #################################################################
@@ -205,8 +206,13 @@ class DependencyGraph(object):
         dot_string = self.to_dot()
 
         try:
+            # CVE-2026-78680: run dot by absolute path, never from CWD.
+            dot_binary = _find_trusted_binary('dot')
+        except LookupError:
+            raise Exception('Cannot find the dot binary from Graphviz package')
+        try:
             process = subprocess.Popen(
-                ['dot', '-Tsvg'],
+                [dot_binary, '-Tsvg'],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
