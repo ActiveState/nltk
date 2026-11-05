@@ -1,6 +1,8 @@
 Version 3.4.5.post3 2026-11-04
 
-ActiveState security release on the 3.4.5 line (Python 2.7 compatible).
+ActiveState security release on the 3.4.5 line, for Python 2.7 only.
+setup.py now declares python_requires '>=2.7, <3', so pip will not install
+this release on Python 3; Python 3 users should use a current upstream NLTK.
 Release versions now use the PEP 440 post-release form (3.4.5.postN).
 
 | CVE | Advisory | Status |
@@ -64,9 +66,12 @@ Notes:
   FeatStructReader refuses nesting deeper than MAX_DEPTH (100).
 * CVE-2026-0848 / CVE-2026-12252: in this release nltk.internals.java()
   raises AttributeError (subprocess.DEVNULL) on Python 2.7 before starting
-  a JVM, so the Stanford/CoreNLP/Weka wrappers cannot run there. Upstream's
-  fix is a classpath location allowlist that would reject installs outside
-  nltk_data; it is deferred.
+  a JVM, so the Stanford/CoreNLP/Weka wrappers cannot run there. The
+  deferral relies on this release being Python 2.7 only: on Python 3,
+  java() does run, without a JAR location check, which is why
+  python_requires excludes Python 3. Upstream's fix is a classpath
+  location allowlist that would reject installs outside nltk_data; it is
+  deferred.
 * CVE-2026-80205 / CVE-2026-80206: Text.findall, TokenSearcher.findall and
   tgrep compile patterns supplied by the caller. Upstream bounds them with
   the third-party regex module's timeout, which no Python 2 release of
