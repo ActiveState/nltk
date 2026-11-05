@@ -13,6 +13,7 @@ import subprocess
 from collections import namedtuple
 
 from nltk.compat import python_2_unicode_compatible
+from nltk.internals import _find_trusted_binary
 
 
 @python_2_unicode_compatible
@@ -132,8 +133,13 @@ class AlignedSent(object):
         dot_string = self._to_dot().encode('utf8')
         output_format = 'svg'
         try:
+            # CVE-2026-78680: run dot by absolute path, never from CWD.
+            dot_binary = _find_trusted_binary('dot')
+        except LookupError:
+            raise Exception('Cannot find the dot binary from Graphviz package')
+        try:
             process = subprocess.Popen(
-                ['dot', '-T%s' % output_format],
+                [dot_binary, '-T%s' % output_format],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

@@ -86,21 +86,21 @@ URLS = r"""			# Capture 1: entire matched URL
     )
     |					#   or
                                        # looks like domain name followed by a slash:
-    [a-z0-9.\-]+[.]
+    [a-z0-9.\-]{1,255}[.]
     (?:[a-z]{2,13})
     /
   )
   (?:					# One or more:
     [^\s()<>{}\[\]]+			# Run of non-space, non-()<>{}[]
     |					#   or
-    \([^\s()]*?\([^\s()]+\)[^\s()]*?\) # balanced parens, one level deep: (...(...)...)
+    \([^\s()]{0,255}?\([^\s()]{1,255}\)[^\s()]{0,255}?\) # balanced parens, one level deep: (...(...)...)
     |
-    \([^\s]+?\)				# balanced parens, non-recursive: (...)
+    \([^\s]{1,255}?\)				# balanced parens, non-recursive: (...)
   )+
   (?:					# End with:
-    \([^\s()]*?\([^\s()]+\)[^\s()]*?\) # balanced parens, one level deep: (...(...)...)
+    \([^\s()]{0,255}?\([^\s()]{1,255}\)[^\s()]{0,255}?\) # balanced parens, one level deep: (...(...)...)
     |
-    \([^\s]+?\)				# balanced parens, non-recursive: (...)
+    \([^\s]{1,255}?\)				# balanced parens, non-recursive: (...)
     |					#   or
     [^\s`!()\[\]{};:'".,<>?«»“”‘’]	# not a space or one of these punct chars
   )
@@ -108,7 +108,7 @@ URLS = r"""			# Capture 1: entire matched URL
   (?:
   	(?<!@)			        # not preceded by a @, avoid matching foo@_gmail.com_
     [a-z0-9]+
-    (?:[.\-][a-z0-9]+)*
+    (?:[.\-][a-z0-9]+){0,126}
     [.]
     (?:[a-z]{2,13})
     \b
@@ -148,7 +148,7 @@ REGEXPS = (
     # Twitter hashtags:
     r"""(?:\#+[\w_]+[\w\'_\-]*[\w_]+)""",
     # email addresses
-    r"""[\w.+-]+@[\w-]+\.(?:[\w-]\.?)+[\w-]""",
+    r"""[\w.+-]{1,64}@[\w-]{1,63}\.(?:[\w-]\.?){1,251}[\w-]""",
     # Remaining word types:
     r"""
     (?:[^\W\d_](?:[^\W\d_]|['\-_])+[^\W\d_]) # Words with apostrophes or dashes.

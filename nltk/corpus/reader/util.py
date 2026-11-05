@@ -27,7 +27,7 @@ from six import string_types, text_type
 from nltk.tokenize import wordpunct_tokenize
 from nltk.internals import slice_bounds
 from nltk.data import PathPointer, FileSystemPathPointer, ZipFilePathPointer
-from nltk.data import SeekableUnicodeStreamReader
+from nltk.data import SeekableUnicodeStreamReader, _path_within_root
 from nltk.util import AbstractLazySequence, LazySubsequence, LazyConcatenation, py25
 
 ######################################################################
@@ -706,6 +706,12 @@ def read_sexpr_block(stream, block_size=16384, comment_char=None):
 
     if comment_char:
         COMMENT = re.compile('(?m)^%s.*$' % re.escape(comment_char))
+    # One s-expression spanning many blocks used to re-parse the whole
+    # growing buffer after every fixed-size read: O(n^2) (CWE-407, same
+    # upstream change as CVE-2026-81723).  Doubling the read size makes the
+    # number of re-parses O(log n); the stream is seeked back to the parsed
+    # offset, so the result is unchanged.
+    read_size = block_size
     while True:
         try:
             # If we're stripping comments, then make sure our block ends
@@ -730,7 +736,8 @@ def read_sexpr_block(stream, block_size=16384, comment_char=None):
             return tokens
         except ValueError as e:
             if e.args[0] == 'Block too small':
-                next_block = stream.read(block_size)
+                read_size *= 2
+                next_block = stream.read(read_size)
                 if next_block:
                     block += next_block
                     continue
@@ -820,10 +827,18 @@ def find_corpus_fileids(root, regexp):
             kwargs = {'followlinks': True}
         for dirname, subdirs, fileids in os.walk(root.path, **kwargs):
             prefix = ''.join('%s/' % p for p in _path_from(root.path, dirname))
+            # CVE-2026-70626 / CVE-2026-79676: do not list (or descend
+            # into) symlinks that resolve outside the corpus root.
             items += [
                 prefix + fileid
                 for fileid in fileids
                 if re.match(regexp, prefix + fileid)
+                and _path_within_root(os.path.join(dirname, fileid), root.path)
+            ]
+            subdirs[:] = [
+                d
+                for d in subdirs
+                if _path_within_root(os.path.join(dirname, d), root.path)
             ]
             # Don't visit svn directories:
             if '.svn' in subdirs:

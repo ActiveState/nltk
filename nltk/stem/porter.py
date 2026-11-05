@@ -139,11 +139,28 @@ class PorterStemmer(StemmerI):
         if word[i] in self.vowels:
             return False
         if word[i] == 'y':
-            if i == 0:
-                return True
-            else:
-                return not self._is_consonant(word, i - 1)
+            # Resolve a run of 'y's iteratively (CWE-674): a 'y' is a
+            # consonant iff the letter before it is not.
+            negate = False
+            while i > 0 and word[i] == 'y':
+                negate = not negate
+                i -= 1
+            return (word[i] not in self.vowels) != negate
         return True
+
+    def _consonant_flags(self, word):
+        """Consonant/vowel flags for every position of ``word`` in one
+        O(n) pass; equivalent to ``[_is_consonant(word, i) for i ...]``
+        (CWE-407)."""
+        flags = []
+        for i, ch in enumerate(word):
+            if ch in self.vowels:
+                flags.append(False)
+            elif ch == 'y':
+                flags.append(True if i == 0 else not flags[i - 1])
+            else:
+                flags.append(True)
+        return flags
 
     def _measure(self, stem):
         """Returns the 'measure' of stem, per definition in the paper
@@ -185,11 +202,9 @@ class PorterStemmer(StemmerI):
         # character in `stem` is a consonant or a vowel.
         # e.g. 'falafel' becomes 'cvcvcvc',
         #      'architecture' becomes 'vcccvcvccvcv'
-        for i in range(len(stem)):
-            if self._is_consonant(stem, i):
-                cv_sequence += 'c'
-            else:
-                cv_sequence += 'v'
+        cv_sequence = ''.join(
+            'c' if is_cons else 'v' for is_cons in self._consonant_flags(stem)
+        )
 
         # Count the number of 'vc' occurences, which is equivalent to
         # the number of 'VC' occurrences in Porter's reduced form in the
@@ -201,10 +216,7 @@ class PorterStemmer(StemmerI):
 
     def _contains_vowel(self, stem):
         """Returns True if stem contains a vowel, else False"""
-        for i in range(len(stem)):
-            if not self._is_consonant(stem, i):
-                return True
-        return False
+        return not all(self._consonant_flags(stem))
 
     def _ends_double_consonant(self, word):
         """Implements condition *d from the paper

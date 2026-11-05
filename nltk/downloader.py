@@ -160,9 +160,12 @@ default: unzip or not?
 
 """
 import time, os, zipfile, sys, textwrap, threading, itertools, shutil, functools
+import stat
 import subprocess
-from hashlib import md5
+from hashlib import md5, sha256
 from xml.etree import ElementTree
+
+from nltk import xmlsec as _xmlsec
 
 try:
     TKINTER = True
@@ -294,7 +297,7 @@ class Package(object):
     @staticmethod
     def fromxml(xml):
         if isinstance(xml, string_types):
-            xml = ElementTree.parse(xml)
+            xml = _xmlsec.parse(xml)
         for key in xml.attrib:
             xml.attrib[key] = text_type(xml.attrib[key])
         return Package(**xml.attrib)
@@ -335,7 +338,7 @@ class Collection(object):
     @staticmethod
     def fromxml(xml):
         if isinstance(xml, string_types):
-            xml = ElementTree.parse(xml)
+            xml = _xmlsec.parse(xml)
         for key in xml.attrib:
             xml.attrib[key] = text_type(xml.attrib[key])
         children = [child.get('ref') for child in xml.findall('item')]
@@ -757,6 +760,21 @@ class Downloader(object):
         yield FinishDownloadMessage(info)
         yield ProgressMessage(80)
 
+        # CVE-2026-12259 / CVE-2026-63310: verify size and checksum of the
+        # downloaded file against the index *before* it is extracted, so a
+        # tampered or truncated archive never becomes live.  Prefer the
+        # index's sha256_checksum when present; fall back to the md5
+        # checksum carried by older indexes.
+        failure = self._integrity_error(info, filepath)
+        if failure is not None:
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
+            yield ErrorMessage(
+                info, 'Integrity check failed for %r: %s' % (info.id, failure))
+            return
+
         # If it's a zipfile, uncompress it.
         if info.filename.endswith('.zip'):
             zipdir = os.path.join(download_dir, info.subdir)
@@ -764,7 +782,12 @@ class Downloader(object):
             # been unzipped (presumably a previous version).
             if info.unzip or os.path.exists(os.path.join(zipdir, info.id)):
                 yield StartUnzipMessage(info)
-                for msg in _unzip_iter(filepath, zipdir, verbose=False):
+                # CVE-2026-12261: pass info.id so _unzip_iter rejects any
+                # member whose top-level directory is not this package's own
+                # (blocks cross-package overwrite inside the shared subdir).
+                for msg in _unzip_iter(
+                    filepath, zipdir, verbose=False, expected_root=info.id
+                ):
                     # Somewhat of a hack, but we need a proper package reference
                     msg.package = info
                     yield msg
@@ -915,6 +938,22 @@ class Downloader(object):
                     self._status_cache[info.id] = self._pkg_status(info, filepath)
                 return self._status_cache[info.id]
 
+    @staticmethod
+    def _integrity_error(info, filepath):
+        """Return a reason string if ``filepath`` does not match the size
+        and checksum recorded for ``info`` in the index, else None."""
+        size = os.path.getsize(filepath)
+        if info.size is not None and size != int(info.size):
+            return 'size mismatch (got %d, expected %d)' % (size, int(info.size))
+        sha256_checksum = getattr(info, 'sha256_checksum', None)
+        if sha256_checksum:
+            if sha256_hexdigest(filepath) != sha256_checksum:
+                return 'sha256 mismatch'
+        elif info.checksum:
+            if md5_hexdigest(filepath) != info.checksum:
+                return 'md5 mismatch'
+        return None
+
     def _pkg_status(self, info, filepath):
         if not os.path.exists(filepath):
             return self.NOT_INSTALLED
@@ -927,8 +966,13 @@ class Downloader(object):
         if filestat.st_size != int(info.size):
             return self.STALE
 
-        # Check if the file's checksum matches
-        if md5_hexdigest(filepath) != info.checksum:
+        # Check if the file's checksum matches (sha256 when the index
+        # provides it -- CVE-2026-12259 / CVE-2026-63310 -- else md5).
+        sha256_checksum = getattr(info, 'sha256_checksum', None)
+        if sha256_checksum:
+            if sha256_hexdigest(filepath) != sha256_checksum:
+                return self.STALE
+        elif md5_hexdigest(filepath) != info.checksum:
             return self.STALE
 
         # If it's a zipfile, and it's been at least partially
@@ -981,7 +1025,7 @@ class Downloader(object):
 
         # Download the index file.
         self._index = nltk.internals.ElementWrapper(
-            ElementTree.parse(urlopen(self._url)).getroot()
+            _xmlsec.parse(urlopen(self._url)).getroot()
         )
         self._index_timestamp = time.time()
 
@@ -2255,6 +2299,27 @@ def _md5_hexdigest(fp):
     return md5_digest.hexdigest()
 
 
+def sha256_hexdigest(file):
+    """
+    Calculate and return the SHA-256 checksum for a given file.
+    ``file`` may either be a filename or an open stream.
+    """
+    if isinstance(file, string_types):
+        with open(file, 'rb') as infile:
+            return _sha256_hexdigest(infile)
+    return _sha256_hexdigest(file)
+
+
+def _sha256_hexdigest(fp):
+    sha256_digest = sha256()
+    while True:
+        block = fp.read(1024 * 16)  # 16k blocks
+        if not block:
+            break
+        sha256_digest.update(block)
+    return sha256_digest.hexdigest()
+
+
 # change this to periodically yield progress messages?
 # [xx] get rid of topdir parameter -- we should be checking
 # this when we build the index, anyway.
@@ -2268,7 +2333,7 @@ def unzip(filename, root, verbose=True):
             raise Exception(message)
 
 
-def _unzip_iter(filename, root, verbose=True):
+def _unzip_iter(filename, root, verbose=True, expected_root=None):
     if verbose:
         sys.stdout.write('Unzipping %s' % os.path.split(filename)[1])
         sys.stdout.flush()
@@ -2288,6 +2353,18 @@ def _unzip_iter(filename, root, verbose=True):
     root_real = os.path.realpath(root)
     for member in zf.infolist():
         name = member.filename.replace('\\', '/')
+        # CVE-2026-12261: when extracting a downloaded package, every member
+        # must live under the package's own top-level directory.  Otherwise a
+        # package could overwrite another package's files in the shared
+        # subdir (e.g. taggers/) without any '..' traversal.
+        if expected_root is not None:
+            top = name.lstrip('/').split('/')[0]
+            if top != expected_root:
+                yield ErrorMessage(
+                    filename,
+                    'Cross-package overwrite blocked: member %r is outside '
+                    'the owning package directory %r' % (name, expected_root))
+                return
         if name.startswith('/') or (':' in name.split('/')[0]):
             yield ErrorMessage(
                 filename, 'Unsafe zip entry (absolute path): %r' % name)
@@ -2307,6 +2384,21 @@ def _unzip_iter(filename, root, verbose=True):
             yield ErrorMessage(
                 filename, 'Unsafe zip entry (escapes target dir): %r' % name)
             return
+        # CVE-2026-81727: zipfile.extract opens an existing target with
+        # open(path, 'wb'), which truncates and writes the existing inode.
+        # If that file is a hardlink to something outside the data
+        # directory, the write lands outside the root (realpath cannot see
+        # hardlinks).  Refuse multiply-linked regular files as targets.
+        if parts:
+            try:
+                st = os.lstat(os.path.join(root, *parts))
+            except OSError:
+                st = None
+            if st is not None and stat.S_ISREG(st.st_mode) and st.st_nlink > 1:
+                yield ErrorMessage(
+                    filename,
+                    'Unsafe extraction target (multiply-linked file): %r' % name)
+                return
 
     zf.extractall(root)
 
@@ -2458,7 +2550,7 @@ def _find_collections(root):
         for filename in files:
             if filename.endswith('.xml'):
                 xmlfile = os.path.join(dirname, filename)
-                yield ElementTree.parse(xmlfile).getroot()
+                yield _xmlsec.parse(xmlfile).getroot()
 
 
 def _find_packages(root):
@@ -2486,7 +2578,7 @@ def _find_packages(root):
                 except Exception as e:
                     raise ValueError('Error reading file %r!\n%s' % (zipfilename, e))
                 try:
-                    pkg_xml = ElementTree.parse(xmlfilename).getroot()
+                    pkg_xml = _xmlsec.parse(xmlfilename).getroot()
                 except Exception as e:
                     raise ValueError('Error reading file %r!\n%s' % (xmlfilename, e))
 

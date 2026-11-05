@@ -16,6 +16,7 @@ import os
 import re
 import textwrap
 import itertools
+import ntpath
 import sys
 import types
 from collections import defaultdict, OrderedDict
@@ -26,6 +27,7 @@ from six.moves import zip_longest
 from pprint import pprint
 
 from nltk.corpus.reader import XMLCorpusReader, XMLCorpusView
+from nltk.data import FileSystemPathPointer
 from nltk.compat import python_2_unicode_compatible
 from nltk.util import LazyConcatenation, LazyMap, LazyIteratorList
 
@@ -779,6 +781,26 @@ class FramenetError(Exception):
     """An exception class for framenet-related errors."""
 
 
+def _reject_unsafe_path_component(value, kind):
+    """
+    CVE-2026-12074 / CVE-2026-62385: reject a caller- or corpus-supplied name
+    that is interpolated into an XML file path and could escape the corpus
+    root: path separators, ``..``, or a Windows drive/UNC prefix (which makes
+    ``os.path.join`` drop the root without any separator).  ``ntpath`` is
+    used so the drive check applies on every platform.
+    """
+    if not isinstance(value, string_types):
+        value = text_type(value)
+    if (
+        os.sep in value
+        or '/' in value
+        or '\\' in value
+        or '..' in value
+        or ntpath.splitdrive(value)[0]
+    ):
+        raise FramenetError('Invalid %s: %r' % (kind, value))
+
+
 @python_2_unicode_compatible
 class AttrDict(dict):
 
@@ -1343,6 +1365,15 @@ warnings(True) to display corpus consistency warnings when loading data
         # frame and FE relations
         self._buildrelationindex()
 
+    def _safe_locpath(self, subdir, fname):
+        """
+        Resolve ``subdir/fname`` through the corpus root's containment
+        checks (``..``, absolute paths, symlinks escaping the root) and
+        return a path that XMLCorpusView can open.
+        """
+        pointer = self.abspath(subdir + '/' + fname)
+        return pointer.path if isinstance(pointer, FileSystemPathPointer) else pointer
+
     def doc(self, fn_docid):
         """
         Returns the annotated document whose id number is
@@ -1400,7 +1431,9 @@ warnings(True) to display corpus consistency warnings when loading data
             raise FramenetError("Unknown document id: {0}".format(fn_docid))
 
         # construct the path name for the xml file containing the document info
-        locpath = os.path.join("{0}".format(self._root), self._fulltext_dir, xmlfname)
+        # (CVE-2026-62385: the filename comes from the corpus index)
+        _reject_unsafe_path_component(xmlfname, 'document filename')
+        locpath = self._safe_locpath(self._fulltext_dir, xmlfname)
 
         # Grab the top-level xml element containing the fulltext annotation
         elt = XMLCorpusView(locpath, 'fullTextAnnotation')[0]
@@ -1485,12 +1518,12 @@ warnings(True) to display corpus consistency warnings when loading data
             self._buildframeindex()
 
         # construct the path name for the xml file containing the Frame info
-        locpath = os.path.join(
-            "{0}".format(self._root), self._frame_dir, fn_fname + ".xml"
-        )
+        # (CVE-2026-12074: fn_fname is caller-supplied)
+        _reject_unsafe_path_component(fn_fname, 'frame name')
         # print(locpath, file=sys.stderr)
         # Grab the xml for the frame
         try:
+            locpath = self._safe_locpath(self._frame_dir, fn_fname + ".xml")
             elt = XMLCorpusView(locpath, 'frame')[0]
         except IOError:
             raise FramenetError('Unknown frame: {0}'.format(fn_fname))
@@ -1828,13 +1861,16 @@ warnings(True) to display corpus consistency warnings when loading data
         """
         fn_luid = lu.ID
 
+        # CVE-2026-62385: the LU id comes from corpus data and is only
+        # int-cast when numeric.
+        _reject_unsafe_path_component(fn_luid, 'LU id')
         fname = "lu{0}.xml".format(fn_luid)
-        locpath = os.path.join("{0}".format(self._root), self._lu_dir, fname)
         # print(locpath, file=sys.stderr)
         if not self._lu_idx:
             self._buildluindex()
 
         try:
+            locpath = self._safe_locpath(self._lu_dir, fname)
             elt = XMLCorpusView(locpath, 'lexUnit')[0]
         except IOError:
             raise FramenetError('Unknown LU id: {0}'.format(fn_luid))

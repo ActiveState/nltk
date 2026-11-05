@@ -70,8 +70,31 @@ from nltk.tokenize import *
 
 TITLE = re.compile(r'^\[t\](.*)$')  # [t] Title
 FEATURES = re.compile(
-    r'((?:(?:\w+\s)+)?\w+)\[((?:\+|\-)\d)\]'
+    r'(\w{1,80}(?:\s\w{1,80}){0,50})\[((?:\+|\-)\d)\]'
 )  # find 'feature' in feature[+3]
+_FEATURE_MARK = re.compile(r'\[((?:\+|\-)\d)\]')
+_LABEL_REV = re.compile(r'\w+(?:\s\w+)*')
+
+
+def _find_features(line):
+    """Linear-time equivalent of findall() with the original unbounded
+    FEATURES pattern ``((?:(?:\\w+\\s)+)?\\w+)\\[((?:\\+|\\-)\\d)\\]`` (CWE-1333).
+
+    The label is the maximal run of single-whitespace-separated words that
+    immediately precedes each ``[+N]``/``[-N]`` marker.  It is found by one
+    anchored match on the reversed text between markers instead of letting
+    ``findall`` rescan an unbounded label from every position.
+    """
+    out = []
+    last = 0
+    for m in _FEATURE_MARK.finditer(line):
+        label = _LABEL_REV.match(line[last : m.start()][::-1])
+        if label:
+            out.append((label.group(0)[::-1], m.group(1)))
+        last = m.end()
+    return out
+
+
 NOTES = re.compile(r'\[(?!t)(p|u|s|cc|cs)\]')  # find 'p' in camera[+2][p]
 SENT = re.compile(r'##(.*)$')  # find tokenized sentence
 
@@ -303,7 +326,7 @@ class ReviewsCorpusReader(CorpusReader):
             line = stream.readline()
             if not line:
                 return features
-            features.extend(re.findall(FEATURES, line))
+            features.extend(_find_features(line))
         return features
 
     def _read_review_block(self, stream):
@@ -331,7 +354,7 @@ class ReviewsCorpusReader(CorpusReader):
                 stream.seek(oldpos)
                 return [review]
             # Anything else is part of the review line.
-            feats = re.findall(FEATURES, line)
+            feats = _find_features(line)
             notes = re.findall(NOTES, line)
             sent = re.findall(SENT, line)
             if sent:

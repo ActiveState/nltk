@@ -51,7 +51,10 @@ setup(
     url="http://nltk.org/",
     long_description="""\
 The Natural Language Toolkit (NLTK) is a Python package for
-natural language processing.  NLTK requires Python 2.7, 3.5, 3.6, or 3.7.""",
+natural language processing.
+
+This is ActiveState's security-maintained 3.4.5 line. It supports
+Python 2.7 only; Python 3 users should install a current upstream NLTK.""",
     license="Apache License, Version 2.0",
     keywords=[
         'NLP',
@@ -79,10 +82,9 @@ natural language processing.  NLTK requires Python 2.7, 3.5, 3.6, or 3.7.""",
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
+        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 2 :: Only',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'Topic :: Scientific/Engineering :: Human Machine Interfaces',
@@ -93,6 +95,7 @@ natural language processing.  NLTK requires Python 2.7, 3.5, 3.6, or 3.7.""",
         'Topic :: Text Processing :: Indexing',
         'Topic :: Text Processing :: Linguistic',
     ],
+    python_requires='>=2.7, <3',
     package_data={'nltk': ['test/*.doctest', 'VERSION']},
     install_requires=[
         'six',

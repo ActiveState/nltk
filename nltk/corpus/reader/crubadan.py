@@ -75,7 +75,9 @@ class CrubadanCorpusReader(CorpusReader):
                 "Please install the 'crubadan' corpus first, use nltk.download()"
             )
 
-        mapper_file = path.join(self.root, self._LANG_MAPPER_FILE)
+        # CVE-2026-79676: resolve through the root's containment check
+        # (refuses a table.txt symlink pointing outside the corpus).
+        mapper_file = self.abspath(self._LANG_MAPPER_FILE).path
         if self._LANG_MAPPER_FILE not in self.fileids():
             raise RuntimeError("Could not find language mapper file: " + mapper_file)
 
@@ -94,7 +96,9 @@ class CrubadanCorpusReader(CorpusReader):
             raise RuntimeError("Unsupported language.")
 
         crubadan_code = self.iso_to_crubadan(lang)
-        ngram_file = path.join(self.root, crubadan_code + '-3grams.txt')
+        # CVE-2026-79676: crubadan_code comes from table.txt (corpus data);
+        # abspath() refuses '..', absolute paths and escaping symlinks.
+        ngram_file = self.abspath(crubadan_code + '-3grams.txt').path
 
         if not path.isfile(ngram_file):
             raise RuntimeError("No N-gram file found for requested language.")

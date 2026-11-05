@@ -22,6 +22,7 @@ except ImportError:
 
 from six import string_types
 
+from nltk import xmlsec as _xmlsec
 from nltk.data import SeekableUnicodeStreamReader
 from nltk.tokenize import WordPunctTokenizer
 from nltk.internals import ElementWrapper
@@ -50,7 +51,7 @@ class XMLCorpusReader(CorpusReader):
         if not isinstance(fileid, string_types):
             raise TypeError('Expected a single file identifier string')
         # Read the XML in using ElementTree.
-        elt = ElementTree.parse(self.abspath(fileid).open()).getroot()
+        elt = _xmlsec.parse(self.abspath(fileid).open()).getroot()
         # If requested, wrap it.
         if self._wrap_etree:
             elt = ElementWrapper(elt)
@@ -260,16 +261,31 @@ class XMLCorpusView(StreamBackedCorpusView):
         another block.
         """
         fragment = ''
+        # Track incrementally whether the fragment ends inside an unterminated
+        # '<...' tag and where the last '<' is, so that one oversized tag does
+        # not re-run _VALID_XML_RE / rfind over the whole growing buffer on
+        # every block (O(n^2), CWE-407).  An in-tag fragment can never match.
+        in_tag = False
+        last_lt = -1
 
         if isinstance(stream, SeekableUnicodeStreamReader):
             startpos = stream.tell()
         while True:
             # Read a block and add it to the fragment.
+            block_start = len(fragment)
             xml_block = stream.read(self._BLOCK_SIZE)
             fragment += xml_block
+            lt = xml_block.rfind('<')
+            gt = xml_block.rfind('>')
+            if lt > gt:
+                in_tag = True
+            elif gt > lt:
+                in_tag = False
+            if lt >= 0:
+                last_lt = block_start + lt
 
             # Do we have a well-formed xml fragment?
-            if self._VALID_XML_RE.match(fragment):
+            if not in_tag and self._VALID_XML_RE.match(fragment):
                 return fragment
 
             # Do we have a fragment that will never be well-formed?
@@ -286,7 +302,7 @@ class XMLCorpusView(StreamBackedCorpusView):
             # If not, then we must be in the middle of a <..tag..>.
             # If appropriate, backtrack to the most recent '<'
             # character.
-            last_open_bracket = fragment.rfind('<')
+            last_open_bracket = last_lt
             if last_open_bracket > 0:
                 if self._VALID_XML_RE.match(fragment[:last_open_bracket]):
                     if isinstance(stream, SeekableUnicodeStreamReader):

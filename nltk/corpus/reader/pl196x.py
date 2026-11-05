@@ -22,6 +22,46 @@ ANA = re.compile(r'ana="(.*?)"')
 
 TEXTID = re.compile(r'text id="(.*?)"')
 
+_OPEN_P = re.compile(r'<p')
+_CLOSE_P = re.compile(r'</p>')
+_OPEN_S = re.compile(r'<s')
+_CLOSE_S = re.compile(r'</s>')
+_OPEN_WC = re.compile(r'<[wc]')
+_CLOSE_WC = re.compile(r'</[wc]>')
+
+
+def _find_elements(s, open_re, close_re, tagged=False):
+    """Linear-time equivalent of ``findall`` with PARA / SENT / WORD /
+    TAGGEDWORD on a newline-free block.
+
+    Those lazy ``.*?`` patterns rescan to the end of the block from every
+    unclosed opening tag, which is O(k*n) (CWE-407).  Once one opening tag
+    has no closing tag after it, no later one can either, so stop there.
+    """
+    out = []
+    pos = 0
+    n = len(s)
+    while True:
+        m = open_re.search(s, pos)
+        if m is None:
+            break
+        a = m.end()
+        if a >= n or s[a] not in ' >':
+            pos = m.start() + 1
+            continue
+        gt = s.find('>', a)
+        if gt < 0:
+            break
+        c = close_re.search(s, gt + 1)
+        if c is None:
+            break
+        if tagged:
+            out.append((s[m.start() + 1 : gt + 1], s[gt + 1 : c.start()]))
+        else:
+            out.append(s[gt + 1 : c.start()])
+        pos = c.end()
+    return out
+
 
 class TEICorpusView(StreamBackedCorpusView):
     def __init__(
@@ -48,32 +88,54 @@ class TEICorpusView(StreamBackedCorpusView):
     def read_block(self, stream):
         block = stream.readlines(self._pagesize)
         block = concat(block)
-        while (block.count('<text id') > block.count('</text>')) or block.count(
-            '<text id'
-        ) == 0:
+        # Running counts: re-counting the whole growing block per line is
+        # O(n^2) on a file with no '</text>' (CWE-407).
+        open_count = block.count('<text id')
+        close_count = block.count('</text>')
+        while (open_count > close_count) or (open_count == 0):
             tmp = stream.readline()
             if len(tmp) <= 0:
                 break
             block += tmp
+            open_count += tmp.count('<text id')
+            close_count += tmp.count('</text>')
 
         block = block.replace('\n', '')
 
-        textids = TEXTID.findall(block)
         if self._textids:
-            for tid in textids:
-                if tid not in self._textids:
-                    beg = block.find(tid) - 1
-                    end = block[beg:].find('</text>') + len('</text>')
-                    block = block[:beg] + block[beg + end :]
+            # Keep only requested <text> elements in one forward pass
+            # (per-id find + rebuild was O(k*n), CWE-407).
+            kept = []
+            pos = 0
+            while True:
+                beg = block.find('<text id', pos)
+                if beg < 0:
+                    kept.append(block[pos:])
+                    break
+                q1 = block.find('"', beg)
+                q2 = block.find('"', q1 + 1) if q1 >= 0 else -1
+                tid = block[q1 + 1 : q2] if 0 <= q1 < q2 else ''
+                close = block.find('</text>', beg)
+                end = len(block) if close < 0 else close + len('</text>')
+                kept.append(block[pos:beg])
+                if tid in self._textids:
+                    kept.append(block[beg:end])
+                pos = end
+            block = ''.join(kept)
 
         output = []
-        for para_str in PARA.findall(block):
+        for para_str in _find_elements(block, _OPEN_P, _CLOSE_P):
             para = []
-            for sent_str in SENT.findall(para_str):
+            for sent_str in _find_elements(para_str, _OPEN_S, _CLOSE_S):
                 if not self._tagged:
-                    sent = WORD.findall(sent_str)
+                    sent = _find_elements(sent_str, _OPEN_WC, _CLOSE_WC)
                 else:
-                    sent = list(map(self._parse_tag, TAGGEDWORD.findall(sent_str)))
+                    sent = list(
+                        map(
+                            self._parse_tag,
+                            _find_elements(sent_str, _OPEN_WC, _CLOSE_WC, True),
+                        )
+                    )
                 if self._group_by_sent:
                     para.append(sent)
                 else:

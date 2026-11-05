@@ -1,7 +1,6 @@
 """
 A reader for corpora whose documents are in MTE format.
 """
-import os
 import re
 from functools import reduce
 
@@ -266,7 +265,7 @@ class MTECorpusReader(TaggedCorpusReader):
         """
         return concat(
             [
-                MTEFileReader(os.path.join(self._root, f)).words()
+                MTEFileReader(self.abspath(f).path).words()
                 for f in self.__fileids(fileids)
             ]
         )
@@ -280,7 +279,7 @@ class MTECorpusReader(TaggedCorpusReader):
         """
         return concat(
             [
-                MTEFileReader(os.path.join(self._root, f)).sents()
+                MTEFileReader(self.abspath(f).path).sents()
                 for f in self.__fileids(fileids)
             ]
         )
@@ -294,7 +293,7 @@ class MTECorpusReader(TaggedCorpusReader):
         """
         return concat(
             [
-                MTEFileReader(os.path.join(self._root, f)).paras()
+                MTEFileReader(self.abspath(f).path).paras()
                 for f in self.__fileids(fileids)
             ]
         )
@@ -308,7 +307,7 @@ class MTECorpusReader(TaggedCorpusReader):
         """
         return concat(
             [
-                MTEFileReader(os.path.join(self._root, f)).lemma_words()
+                MTEFileReader(self.abspath(f).path).lemma_words()
                 for f in self.__fileids(fileids)
             ]
         )
@@ -327,7 +326,7 @@ class MTECorpusReader(TaggedCorpusReader):
         if tagset == "universal" or tagset == "msd":
             return concat(
                 [
-                    MTEFileReader(os.path.join(self._root, f)).tagged_words(
+                    MTEFileReader(self.abspath(f).path).tagged_words(
                         tagset, tags
                     )
                     for f in self.__fileids(fileids)
@@ -346,7 +345,7 @@ class MTECorpusReader(TaggedCorpusReader):
         """
         return concat(
             [
-                MTEFileReader(os.path.join(self._root, f)).lemma_sents()
+                MTEFileReader(self.abspath(f).path).lemma_sents()
                 for f in self.__fileids(fileids)
             ]
         )
@@ -365,7 +364,7 @@ class MTECorpusReader(TaggedCorpusReader):
         if tagset == "universal" or tagset == "msd":
             return concat(
                 [
-                    MTEFileReader(os.path.join(self._root, f)).tagged_sents(
+                    MTEFileReader(self.abspath(f).path).tagged_sents(
                         tagset, tags
                     )
                     for f in self.__fileids(fileids)
@@ -384,7 +383,7 @@ class MTECorpusReader(TaggedCorpusReader):
         """
         return concat(
             [
-                MTEFileReader(os.path.join(self._root, f)).lemma_paras()
+                MTEFileReader(self.abspath(f).path).lemma_paras()
                 for f in self.__fileids(fileids)
             ]
         )
@@ -404,7 +403,7 @@ class MTECorpusReader(TaggedCorpusReader):
         if tagset == "universal" or tagset == "msd":
             return concat(
                 [
-                    MTEFileReader(os.path.join(self._root, f)).tagged_paras(
+                    MTEFileReader(self.abspath(f).path).tagged_paras(
                         tagset, tags
                     )
                     for f in self.__fileids(fileids)
