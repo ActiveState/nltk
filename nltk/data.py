@@ -47,6 +47,7 @@ from gzip import GzipFile, WRITE as GZ_WRITE
 from six import add_metaclass
 from six import string_types, text_type
 from six.moves.urllib.request import urlopen, url2pathname
+from six.moves.urllib.parse import unquote
 
 try:
     import cPickle as pickle
@@ -593,6 +594,31 @@ _resource_cache = {}
    need to be loaded more than once."""
 
 
+def _unsafe_resource_reason(resource_name):
+    """
+    CVE-2026-54293 / CVE-2026-12243: return why a normalized resource name
+    is unsafe to join onto an ``nltk.data.path`` entry, or None.
+
+    ``find()`` joins ``url2pathname(resource_name)`` onto each data path,
+    and ``url2pathname`` percent-decodes, so the check is applied to both
+    the name and its decoded form.  A relative name must stay relative and
+    must not contain ``..`` (literal or encoded, e.g. ``%2e%2e/`` or
+    ``..%2f``); an absolute name (the ``file:`` route) must not smuggle an
+    encoded ``..`` component.
+    """
+    decoded = unquote(resource_name)
+    relative = not os.path.isabs(resource_name)
+    for candidate in (resource_name, decoded):
+        norm = candidate.replace('\\', '/')
+        if '..' in norm.split('/'):
+            return 'path traversal'
+        if relative and (
+            norm.startswith('/') or re.match(r'[A-Za-z]:', norm) is not None
+        ):
+            return 'absolute path'
+    return None
+
+
 def find(resource_name, paths=None):
     """
     Find the given resource by searching through the directories and
@@ -631,6 +657,13 @@ def find(resource_name, paths=None):
     :rtype: str
     """
     resource_name = normalize_resource_name(resource_name, True)
+
+    # CVE-2026-54293 / CVE-2026-12243: refuse names that would escape the
+    # data directories once url2pathname() decodes them.
+    reason = _unsafe_resource_reason(resource_name)
+    if reason is not None:
+        raise ValueError(
+            'Unsafe resource name (%s): %r' % (reason, resource_name))
 
     # Resolve default paths at runtime in-case the user overrides
     # nltk.data.path
