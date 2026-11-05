@@ -160,6 +160,7 @@ default: unzip or not?
 
 """
 import time, os, zipfile, sys, textwrap, threading, itertools, shutil, functools
+import stat
 import subprocess
 from hashlib import md5, sha256
 from xml.etree import ElementTree
@@ -2381,6 +2382,21 @@ def _unzip_iter(filename, root, verbose=True, expected_root=None):
             yield ErrorMessage(
                 filename, 'Unsafe zip entry (escapes target dir): %r' % name)
             return
+        # CVE-2026-81727: zipfile.extract opens an existing target with
+        # open(path, 'wb'), which truncates and writes the existing inode.
+        # If that file is a hardlink to something outside the data
+        # directory, the write lands outside the root (realpath cannot see
+        # hardlinks).  Refuse multiply-linked regular files as targets.
+        if parts:
+            try:
+                st = os.lstat(os.path.join(root, *parts))
+            except OSError:
+                st = None
+            if st is not None and stat.S_ISREG(st.st_mode) and st.st_nlink > 1:
+                yield ErrorMessage(
+                    filename,
+                    'Unsafe extraction target (multiply-linked file): %r' % name)
+                return
 
     zf.extractall(root)
 

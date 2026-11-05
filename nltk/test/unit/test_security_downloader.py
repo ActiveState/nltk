@@ -134,3 +134,36 @@ class IntegrityBeforeExtractTest(_DownloaderTestBase):
         pkg.sha256_checksum = '0' * 64
         d = Downloader(download_dir=self.dl)
         self.assertEqual(d.status(pkg, self.dl), Downloader.STALE)
+
+
+@unittest.skipUnless(hasattr(os, 'link'), 'os.link not available')
+class HardlinkTargetTest(_DownloaderTestBase):
+    """CVE-2026-81727 / GHSA-f794-5jv7-7672"""
+
+    def test_extraction_does_not_write_through_hardlink(self):
+        outside = os.path.join(self.tmp, 'outside.txt')
+        with open(outside, 'w') as f:
+            f.write('SECRET')
+        pkg_dir = os.path.join(self.dl, 'taggers', 'pkg')
+        os.makedirs(pkg_dir)
+        os.link(outside, os.path.join(pkg_dir, 'f.txt'))
+        pkg = self._package('pkg', [('pkg/f.txt', b'OVERWRITTEN')])
+        errors = self._errors(self._install(pkg))
+        self.assertTrue(errors)
+        self.assertIn('multiply-linked', errors[0].message)
+        with open(outside) as f:
+            self.assertEqual(f.read(), 'SECRET')
+
+    def test_unzip_helper_also_refuses_hardlinked_target(self):
+        from nltk.downloader import unzip
+        outside = os.path.join(self.tmp, 'outside.txt')
+        with open(outside, 'w') as f:
+            f.write('SECRET')
+        root = os.path.join(self.tmp, 'root')
+        os.makedirs(os.path.join(root, 'pkg'))
+        os.link(outside, os.path.join(root, 'pkg', 'f.txt'))
+        zpath = os.path.join(self.srv, 'pkg.zip')
+        _make_zip(zpath, [('pkg/f.txt', b'OVERWRITTEN')])
+        self.assertRaises(Exception, unzip, zpath, root, False)
+        with open(outside) as f:
+            self.assertEqual(f.read(), 'SECRET')
