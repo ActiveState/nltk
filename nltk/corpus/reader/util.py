@@ -27,7 +27,7 @@ from six import string_types, text_type
 from nltk.tokenize import wordpunct_tokenize
 from nltk.internals import slice_bounds
 from nltk.data import PathPointer, FileSystemPathPointer, ZipFilePathPointer
-from nltk.data import SeekableUnicodeStreamReader
+from nltk.data import SeekableUnicodeStreamReader, _path_within_root
 from nltk.util import AbstractLazySequence, LazySubsequence, LazyConcatenation, py25
 
 ######################################################################
@@ -820,10 +820,18 @@ def find_corpus_fileids(root, regexp):
             kwargs = {'followlinks': True}
         for dirname, subdirs, fileids in os.walk(root.path, **kwargs):
             prefix = ''.join('%s/' % p for p in _path_from(root.path, dirname))
+            # CVE-2026-70626 / CVE-2026-79676: do not list (or descend
+            # into) symlinks that resolve outside the corpus root.
             items += [
                 prefix + fileid
                 for fileid in fileids
                 if re.match(regexp, prefix + fileid)
+                and _path_within_root(os.path.join(dirname, fileid), root.path)
+            ]
+            subdirs[:] = [
+                d
+                for d in subdirs
+                if _path_within_root(os.path.join(dirname, d), root.path)
             ]
             # Don't visit svn directories:
             if '.svn' in subdirs:

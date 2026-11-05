@@ -80,3 +80,60 @@ class DataLoadTraversalTest(_TreeTestBase):
         # An explicit absolute file: URL remains the caller's choice.
         self.assertEqual(
             load('file:' + self.secret, format='raw', cache=False), b'SECRET')
+
+
+@unittest.skipUnless(hasattr(os, 'symlink'), 'os.symlink not available')
+class CorpusReaderSymlinkTest(_TreeTestBase):
+    """CVE-2026-70626 / GHSA-r6gq-whwq-mvg9 and
+    CVE-2026-79676 / GHSA-p4rw-rvv2-7xwr"""
+
+    def setUp(self):
+        _TreeTestBase.setUp(self)
+        self.root = os.path.join(self.tmp, 'corpus')
+        os.makedirs(self.root)
+        self._write(os.path.join(self.root, 'c.txt'), 'IN ROOT')
+        os.symlink(self.secret, os.path.join(self.root, 'a.txt'))
+        os.symlink(self.outside, os.path.join(self.root, 'd'))
+        os.symlink(
+            os.path.join(self.root, 'c.txt'), os.path.join(self.root, 'lnk.txt'))
+
+    def _reader(self, fileids=r'.*\.txt'):
+        from nltk.corpus.reader import PlaintextCorpusReader
+
+        return PlaintextCorpusReader(self.root, fileids)
+
+    def test_symlinked_file_outside_root_is_refused(self):
+        reader = self._reader(['a.txt'])
+        self.assertRaises(ValueError, reader.open, 'a.txt')
+        self.assertRaises(ValueError, reader.raw, 'a.txt')
+
+    def test_symlinked_dir_outside_root_is_refused(self):
+        reader = self._reader(['d/secret.txt'])
+        self.assertRaises(ValueError, reader.raw, 'd/secret.txt')
+
+    def test_escaping_symlinks_are_not_listed(self):
+        self.assertEqual(self._reader().fileids(), ['c.txt', 'lnk.txt'])
+
+    def test_in_root_symlink_still_reads(self):
+        self.assertEqual(self._reader().raw('lnk.txt'), 'IN ROOT')
+
+    def test_crubadan_language_code_cannot_escape_root(self):
+        from nltk.corpus.reader import CrubadanCorpusReader
+
+        root = os.path.join(self.tmp, 'crubadan')
+        os.makedirs(root)
+        self._write(os.path.join(root, 'table.txt'), '../outside/secret\txxx')
+        self._write(os.path.join(self.outside, 'secret-3grams.txt'), '1 abc\n')
+        reader = CrubadanCorpusReader(root, r'.*\.txt')
+        self.assertRaises(ValueError, reader.lang_freq, 'xxx')
+
+    def test_crubadan_table_symlink_outside_root_is_refused(self):
+        from nltk.corpus.reader import CrubadanCorpusReader
+
+        root = os.path.join(self.tmp, 'crubadan2')
+        os.makedirs(root)
+        table = os.path.join(self.outside, 'table.txt')
+        self._write(table, 'en\teng')
+        os.symlink(table, os.path.join(root, 'table.txt'))
+        self.assertRaises(
+            (ValueError, RuntimeError), CrubadanCorpusReader, root, ['table.txt'])

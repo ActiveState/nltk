@@ -11,6 +11,7 @@ from six import string_types
 
 from nltk.corpus.reader.util import StreamBackedCorpusView, concat
 from nltk.corpus.reader.api import CorpusReader
+from nltk.data import FileSystemPathPointer, _path_within_root
 
 
 def _parse_args(fun):
@@ -200,6 +201,12 @@ class IPIPANCorpusReader(CorpusReader):
 
     def _get_tag(self, f, tag):
         tags = []
+        # CVE-2026-79676: header.xml is derived by string replacement, so
+        # check it still resolves inside the corpus root (no symlink escape).
+        if isinstance(self._root, FileSystemPathPointer) and not _path_within_root(
+            f, self._root.path
+        ):
+            raise ValueError('Path resolves outside the corpus root: %r' % (f,))
         with open(f, 'r') as infile:
             header = infile.read()
         tag_end = 0

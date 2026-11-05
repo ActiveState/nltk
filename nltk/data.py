@@ -273,6 +273,21 @@ def normalize_resource_name(resource_name, allow_relative=True, relative_path=No
 ######################################################################
 
 
+def _path_within_root(path, root):
+    """
+    CVE-2026-70626 / CVE-2026-79676: True if ``path`` resolves (following
+    symlinks) to ``root`` or to something inside it.  A purely lexical
+    check is not enough: a symlink inside a corpus root can point anywhere.
+    """
+    real_root = os.path.normcase(os.path.realpath(root))
+    real_path = os.path.normcase(os.path.realpath(path))
+    if real_path == real_root:
+        return True
+    if not real_root.endswith(os.sep):
+        real_root += os.sep
+    return real_path.startswith(real_root)
+
+
 @add_metaclass(ABCMeta)
 class PathPointer(object):
     """
@@ -360,6 +375,11 @@ class FileSystemPathPointer(PathPointer, text_type):
         _root = os.path.normpath(self._path)
         if _path != _root and not _path.startswith(_root + os.sep):
             raise ValueError('Path escapes the root directory: %r' % (fileid,))
+        # CVE-2026-70626 / CVE-2026-79676: also refuse a path that a
+        # symlink inside the root redirects outside of it.
+        if not _path_within_root(_path, _root):
+            raise ValueError(
+                'Path resolves outside the root directory: %r' % (fileid,))
         return FileSystemPathPointer(_path)
 
     def __repr__(self):
