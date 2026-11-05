@@ -50,3 +50,17 @@ class TestReviewsFeatures(unittest.TestCase):  # GHSA-fg7f-2386-8897
             self.assertEqual(feats, [('ok feature', '+1')])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestTweetTokenizer(unittest.TestCase):  # GHSA-qx2g-xrx7-vfh8
+    def test_dotted_run(self):
+        from nltk.tokenize.casual import TweetTokenizer
+        # unpatched: ~6s at 4000, super-quadratic
+        self.assertLess(_elapsed(lambda: TweetTokenizer().tokenize('a.' * 4000)), 2.0)
+
+    def test_urls_and_email_unchanged(self):
+        from nltk.tokenize.casual import TweetTokenizer
+        toks = TweetTokenizer().tokenize(
+            'see https://foo.example.com/a_(b)_c?x=1 mail a.b+c@ex-ample.co.uk')
+        self.assertIn('https://foo.example.com/a_(b)_c?x=1', toks)
+        self.assertIn('a.b+c@ex-ample.co.uk', toks)
